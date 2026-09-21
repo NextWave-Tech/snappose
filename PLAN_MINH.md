@@ -10,8 +10,7 @@
 cd snappose-api
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
-pip install torch transformers pillow numpy   # chưa có trong requirements.txt, cần thêm
+pip install -r requirements.txt   # đã thêm sẵn torch/transformers/pillow/numpy/httpx
 ```
 
 Hạ tầng chạy local như bình thường:
