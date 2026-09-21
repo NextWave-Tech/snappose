@@ -1,39 +1,40 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { COLORS } from '../constants/colors';
-import { getCategories } from '../api/categories';
-import { getPoses } from '../api/poses';
+import { suggestPose } from '../api/poses';
+import { savePhotoToGallery } from './ArtGalleryScreen';
 import CameraPreview from '../components/CameraPreview';
-import CategoryBar from '../components/CategoryBar';
 import PoseCarousel from '../components/PoseCarousel';
+import DirectorGuidance from '../components/DirectorGuidance';
 
-export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto }) {
-  const [categories, setCategories] = useState([]);
-  const [poses, setPoses] = useState([]);
-  const [categoryId, setCategoryId] = useState(null);
-  const [selectedPoseId, setSelectedPoseId] = useState(null);
+export default function CameraScreen({
+  onCaptured,
+  lastPhotoUrl,
+  onViewLastPhoto,
+  initialPose,
+}) {
+  const [poses, setPoses] = useState(initialPose ? [initialPose] : []);
+  const [selectedPoseId, setSelectedPoseId] = useState(initialPose?.id ?? null);
+  const [detectedEnvironment, setDetectedEnvironment] = useState(initialPose?.category_name ?? null);
+  const [directorEnabled, setDirectorEnabled] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
   const [flashing, setFlashing] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [videoEl, setVideoEl] = useState(null);
+
   const previewRef = useRef(null);
 
+  // Grab the video DOM element once camera stream starts
   useEffect(() => {
-    getCategories()
-      .then((cats) => {
-        setCategories(cats);
-        if (cats[0]) setCategoryId(cats[0].id);
-      })
-      .catch((err) => setLoadError(err.message));
-  }, []);
-
-  useEffect(() => {
-    if (categoryId == null) return;
-    getPoses(categoryId)
-      .then((p) => {
-        setPoses(p);
-        setSelectedPoseId(p[0]?.id ?? null);
-      })
-      .catch((err) => setLoadError(err.message));
-  }, [categoryId]);
+    const timer = setInterval(() => {
+      const el = previewRef.current?.getVideo();
+      if (el) {
+        setVideoEl(el);
+        clearInterval(timer);
+      }
+    }, 300);
+    return () => clearInterval(timer);
+  }, [facingMode]);
 
   const currentPose = useMemo(
     () => poses.find((p) => p.id === selectedPoseId) || poses[0],
@@ -44,19 +45,56 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
     const dataUrl = previewRef.current?.capture();
     if (!dataUrl) return;
     setFlashing(true);
+
+    // Save automatically to user's Art Gallery silently (no toast as requested)
+    savePhotoToGallery(dataUrl, detectedEnvironment || 'Tự do');
+
     setTimeout(() => {
       setFlashing(false);
       onCaptured(dataUrl);
     }, 250);
   };
 
+  const handleSuggest = async () => {
+    const dataUrl = previewRef.current?.capture();
+    if (!dataUrl) return;
+    setSuggesting(true);
+    setLoadError(null);
+    try {
+      // Suggest across all categories — AI detects the environment automatically
+      const suggested = await suggestPose(dataUrl, null, 5);
+      if (suggested && suggested.length > 0) {
+        setPoses(suggested);
+        const topPose = suggested[0];
+        setDetectedEnvironment(topPose.category_name || 'Đã phát hiện');
+        setSelectedPoseId(topPose.id);
+      }
+    } catch (err) {
+      setLoadError('Gợi ý pose thất bại: ' + err.message);
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   return (
-    <div style={{ height: '100%', position: 'relative', background: '#000', overflow: 'hidden' }}>
+    <div style={{
+      height: '100%',
+      position: 'relative',
+      background: '#000',
+      overflow: 'hidden',
+    }}>
+      {/* Live Camera Viewport */}
       <CameraPreview
         ref={previewRef}
         facingMode={facingMode}
         overlay={currentPose?.skeleton_url ? (
-          <div style={{ position: 'absolute', top: '6%', left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none' }}>
+          <div style={{
+            position: 'absolute',
+            top: '6%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            pointerEvents: 'none',
+          }}>
             <img
               src={currentPose.skeleton_url}
               alt=""
@@ -65,91 +103,274 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
                 width: 'auto',
                 opacity: 0.9,
                 display: 'block',
-                filter: 'drop-shadow(0 0 1px white)',
+                filter: 'drop-shadow(0 0 2px white)',
               }}
             />
           </div>
         ) : null}
       />
 
+      {/* Real-time AI Director Guidance (Chỉ dẫn góc máy, khoảng cách, sang trái/phải/lên/xuống) */}
+      <DirectorGuidance
+        videoElement={videoEl}
+        activePose={currentPose}
+        enabled={directorEnabled}
+      />
+
+      {/* Top Floating Glass Header (iPhone Safe Area) */}
+      <div style={{
+        position: 'absolute',
+        top: 'max(14px, env(safe-area-inset-top))',
+        left: 16,
+        right: 16,
+        zIndex: 35,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        pointerEvents: 'none',
+      }}>
+        {/* Environment Badge */}
+        {detectedEnvironment ? (
+          <div
+            className="liquid-glass-pill"
+            style={{
+              pointerEvents: 'auto',
+              padding: '6px 14px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'linear-gradient(135deg, rgba(30, 27, 75, 0.8), rgba(15, 23, 42, 0.8))',
+              border: '1px solid rgba(255, 255, 255, 0.25)',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+              animation: 'fadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
+            }}
+          >
+            <span style={{ fontSize: 13 }}>✨</span>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>
+              Môi trường: {detectedEnvironment}
+            </span>
+          </div>
+        ) : (
+          <div
+            className="liquid-glass-pill"
+            style={{
+              pointerEvents: 'auto',
+              padding: '6px 12px',
+              background: 'rgba(0, 0, 0, 0.5)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+            }}
+          >
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+              Bấm ⭐ để AI gợi ý pose
+            </span>
+          </div>
+        )}
+
+        {/* AI Director Toggle Button */}
+        {currentPose && (
+          <button
+            onClick={() => setDirectorEnabled(!directorEnabled)}
+            className="liquid-btn"
+            style={{
+              pointerEvents: 'auto',
+              padding: '6px 12px',
+              borderRadius: 18,
+              background: directorEnabled
+                ? 'linear-gradient(135deg, rgba(5, 150, 105, 0.5), rgba(16, 185, 129, 0.5))'
+                : 'rgba(20, 20, 28, 0.65)',
+              backdropFilter: 'blur(16px)',
+              border: '1px solid ' + (directorEnabled ? 'rgba(52, 211, 153, 0.6)' : 'rgba(255, 255, 255, 0.18)'),
+              color: '#fff',
+              fontSize: 11,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              cursor: 'pointer',
+            }}
+          >
+            <span>🎯</span>
+            <span>Chỉ dẫn: {directorEnabled ? 'BẬT' : 'TẮT'}</span>
+          </button>
+        )}
+      </div>
+
+      {/* Shutter Flash */}
       {flashing && (
         <div style={{ position: 'absolute', inset: 0, background: '#fff', zIndex: 50, animation: 'flash 0.3s ease-out forwards' }} />
       )}
 
+      {/* Error Message */}
       {loadError && (
         <div style={{
-          position: 'absolute', top: 16, left: 16, right: 16, zIndex: 20,
-          background: 'rgba(200,40,40,0.85)', color: '#fff', padding: '8px 12px',
-          borderRadius: 10, fontSize: 12,
+          position: 'absolute',
+          top: 'calc(max(14px, env(safe-area-inset-top)) + 90px)',
+          left: 16,
+          right: 16,
+          zIndex: 40,
+          background: 'rgba(220, 38, 38, 0.88)',
+          color: '#fff',
+          padding: '10px 14px',
+          borderRadius: 14,
+          fontSize: 13,
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
         }}>
-          Không tải được dữ liệu pose: {loadError}
+          {loadError}
         </div>
       )}
 
-      {/* Bottom workspace */}
+      {/* Bottom Controls — Clean & Minimalist */}
       <div style={{
-        position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 30,
-        padding: '0 16px max(12px, env(safe-area-inset-bottom))',
-        background: '#000',
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 30,
+        padding: '0 16px calc(76px + env(safe-area-inset-bottom))',
+        background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 65%, transparent 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
       }}>
-        <div style={{
-          marginBottom: 10,
-          background: 'rgba(18,18,20,0.84)',
-          backdropFilter: 'blur(24px)',
-          borderRadius: 20,
-          border: '1px solid rgba(255,255,255,0.08)',
-          padding: '10px 10px 8px',
-        }}>
-          <div style={{ marginBottom: 8 }}>
-            <CategoryBar categories={categories} selectedId={categoryId} onSelect={setCategoryId} />
+        {/* Suggested Poses Carousel */}
+        {poses.length > 0 && (
+          <div
+            className="liquid-glass-card"
+            style={{
+              padding: '8px 8px 6px',
+              borderRadius: 20,
+              background: 'rgba(15, 15, 20, 0.72)',
+            }}
+          >
+            <PoseCarousel
+              poses={poses}
+              selectedId={selectedPoseId}
+              onSelect={setSelectedPoseId}
+            />
           </div>
-          <PoseCarousel
-            poses={poses}
-            selectedId={selectedPoseId}
-            onSelect={setSelectedPoseId}
-          />
-        </div>
+        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px 16px' }}>
-          <div style={{ width: 44, display: 'flex', justifyContent: 'flex-start' }}>
+        {/* Action Buttons: AI Suggest + Big Capture Button */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '4px 10px',
+        }}>
+          {/* Left: Last Photo Preview Button */}
+          <div style={{ width: 48, display: 'flex', justifyContent: 'flex-start' }}>
             {lastPhotoUrl ? (
               <button
                 onClick={onViewLastPhoto}
+                className="liquid-btn"
                 aria-label="Xem ảnh vừa chụp"
                 style={{
-                  width: 44, height: 44, borderRadius: 12, padding: 0, cursor: 'pointer',
-                  border: '2px solid rgba(255,255,255,0.5)', overflow: 'hidden', flexShrink: 0,
+                  width: 46,
+                  height: 46,
+                  borderRadius: 14,
+                  padding: 0,
+                  cursor: 'pointer',
+                  border: '2px solid rgba(255, 255, 255, 0.6)',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
                 }}
               >
                 <img src={lastPhotoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               </button>
             ) : (
-              <div style={{ width: 44, height: 44 }} />
+              <div style={{ width: 48, height: 48 }} />
             )}
           </div>
 
-          <button
-            onClick={handleCapture}
-            style={{
-              width: 74, height: 74, borderRadius: 37,
-              background: '#fff', border: `4px solid ${COLORS.accent}`,
-              cursor: 'pointer', flexShrink: 0,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.28)',
-            }}
-          />
-
-          <div style={{ width: 44, display: 'flex', justifyContent: 'flex-end' }}>
+          {/* Center: AI Suggest (⭐) & Capture Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
             <button
-              onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
-              aria-label="Đổi camera trước/sau"
+              onClick={handleSuggest}
+              disabled={suggesting}
+              className="liquid-btn"
+              aria-label="Gợi ý pose bằng AI"
+              title="Gợi ý pose bằng AI"
               style={{
-                width: 40, height: 40, borderRadius: 20,
-                background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255,255,255,0.16)', color: '#fff', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                background: suggesting
+                  ? 'rgba(255, 255, 255, 0.08)'
+                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(217, 70, 239, 0.4))',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1.5px solid rgba(255, 255, 255, 0.35)',
+                color: '#fff',
+                cursor: suggesting ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35), inset 0 1px 1.5px rgba(255, 255, 255, 0.4)',
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {suggesting ? (
+                <div style={{
+                  width: 20,
+                  height: 20,
+                  border: '2.5px solid rgba(255, 255, 255, 0.3)',
+                  borderTopColor: '#fff',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }} />
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2z" />
+                </svg>
+              )}
+            </button>
+
+            {/* Shutter Button */}
+            <button
+              onClick={handleCapture}
+              className="liquid-btn"
+              aria-label="Chụp ảnh"
+              style={{
+                width: 78,
+                height: 78,
+                borderRadius: 39,
+                background: '#ffffff',
+                border: `4px solid ${COLORS.accent}`,
+                cursor: 'pointer',
+                flexShrink: 0,
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(255, 255, 255, 0.25)',
+              }}
+            />
+          </div>
+
+          {/* Right: Camera Switch Button */}
+          <div style={{ width: 48, display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
+              className="liquid-btn"
+              aria-label="Đổi camera trước/sau"
+              style={{
+                width: 46,
+                height: 46,
+                borderRadius: 23,
+                background: 'rgba(255, 255, 255, 0.12)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: '#fff',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)',
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17 2l4 4-4 4" />
                 <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
                 <path d="M7 22l-4-4 4-4" />

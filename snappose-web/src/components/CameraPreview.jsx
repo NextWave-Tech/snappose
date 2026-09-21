@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
-const MIN_ZOOM = 1;
+const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 3;
 
 function touchDistance(touches) {
@@ -8,21 +8,17 @@ function touchDistance(touches) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
-// A rear-facing phone usually exposes its physical lenses as separate
-// "videoinput" devices once permission is granted. We try to spot an
-// ultra-wide lens by label so 0.5x can switch to a *real* wider lens
-// instead of faking it — if none is found, we simply don't offer 0.5x.
-function findUltraWideDeviceId(devices, mainDeviceId) {
-  const rearCandidates = devices.filter((d) => d.kind === 'videoinput' && d.deviceId !== mainDeviceId);
-  const ultra = rearCandidates.find((d) => /ultra.?wide/i.test(d.label));
-  return ultra?.deviceId || null;
+// Find physical ultra-wide lens by label if exposed by browser
+function findUltraWideDeviceId(devices, mainDeviceId, mode = 'environment') {
+  const candidates = devices.filter((d) => d.kind === 'videoinput' && d.deviceId !== mainDeviceId);
+  if (mode === 'user') {
+    return candidates.find((d) => /front.*(wide|ultra)|ultra.*front/i.test(d.label))?.deviceId || null;
+  }
+  return candidates.find((d) => /ultra.?wide|0\.5/i.test(d.label))?.deviceId || null;
 }
 
 // Renders the live camera feed and exposes capture().
-// IMPORTANT: capture() draws only the <video> element onto the canvas.
-// The overlay (passed as `overlay` prop) is a separate absolutely-positioned
-// DOM/SVG layer that is never drawn onto the canvas — this is what
-// structurally guarantees the skeleton/pose guide never ends up in the saved photo.
+// The overlay is a separate layer never drawn onto the canvas.
 const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 'user' }, ref) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
@@ -58,18 +54,16 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
 
-        if (facingMode === 'environment') {
-          const mainId = stream.getVideoTracks()[0]?.getSettings().deviceId || null;
-          mainDeviceIdRef.current = mainId;
-          try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            if (!cancelled) {
-              const ultraId = findUltraWideDeviceId(devices, mainId);
-              if (ultraId) setUltraDeviceId(ultraId);
-            }
-          } catch {
-            // enumerateDevices unsupported/blocked — just skip 0.5x option
+        const mainId = stream.getVideoTracks()[0]?.getSettings().deviceId || null;
+        mainDeviceIdRef.current = mainId;
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          if (!cancelled) {
+            const ultraId = findUltraWideDeviceId(devices, mainId, facingMode);
+            if (ultraId) setUltraDeviceId(ultraId);
           }
+        } catch {
+          // enumerateDevices unsupported/blocked
         }
       }).catch((err) => {
         if (!cancelled) setError(err);
@@ -108,17 +102,38 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
     }
   };
 
-  const handleQuickZoom = (level) => {
+  const handleQuickZoom = async (level) => {
     if (level === 0.5) {
-      switchLens('ultra');
+      if (ultraDeviceId) {
+        await switchLens('ultra');
+        return;
+      }
+      // Try hardware PTZ/optical zoom via applyConstraints
+      const track = streamRef.current?.getVideoTracks()[0];
+      const caps = track?.getCapabilities?.();
+      if (caps && caps.zoom && caps.zoom.min <= 0.5) {
+        try {
+          await track.applyConstraints({ advanced: [{ zoom: 0.5 }] });
+        } catch {
+          // ignore
+        }
+      }
+      zoomRef.current = 0.5;
+      setZoom(0.5);
       return;
     }
+
     if (lensRef.current !== 'main') {
-      switchLens('main').then(() => {
-        zoomRef.current = level;
-        setZoom(level);
-      });
-      return;
+      await switchLens('main');
+    }
+    const track = streamRef.current?.getVideoTracks()[0];
+    const caps = track?.getCapabilities?.();
+    if (caps && caps.zoom && caps.zoom.max >= level) {
+      try {
+        await track.applyConstraints({ advanced: [{ zoom: level }] });
+      } catch {
+        // ignore
+      }
     }
     zoomRef.current = level;
     setZoom(level);
@@ -146,6 +161,9 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
   };
 
   useImperativeHandle(ref, () => ({
+    getVideo() {
+      return videoRef.current;
+    },
     capture() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
@@ -156,16 +174,22 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
       canvas.height = vh;
       const ctx = canvas.getContext('2d');
       const z = zoomRef.current;
-      const sw = vw / z;
-      const sh = vh / z;
-      const sx = (vw - sw) / 2;
-      const sy = (vh - sh) / 2;
-      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, vw, vh);
+      if (z < 1) {
+        ctx.drawImage(video, 0, 0, vw, vh);
+      } else {
+        const sw = vw / z;
+        const sh = vh / z;
+        const sx = (vw - sw) / 2;
+        const sy = (vh - sh) / 2;
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, vw, vh);
+      }
       return canvas.toDataURL('image/jpeg', 0.92);
     },
   }));
 
-  const showZoomChips = facingMode === 'environment';
+  // Show zoom chips for both selfie (front) and environment (rear)
+  const showZoomChips = true;
+  const zoomLevels = facingMode === 'user' ? [0.5, 1, 2] : [0.5, 1, 2, 3];
   const displayZoom = lens === 'ultra' ? 0.5 : zoom;
 
   return (
@@ -187,7 +211,7 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
         }}
       />
 
-      {/* Overlay layer — purely visual, pointerEvents none, never drawn to canvas */}
+      {/* Overlay layer */}
       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}>
         {overlay}
       </div>
@@ -205,9 +229,12 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
       {showZoomChips && (
         <div style={{
           position: 'absolute', bottom: 200, left: '50%', transform: 'translateX(-50%)', zIndex: 6,
-          display: 'flex', gap: 6, background: 'rgba(0,0,0,0.4)', borderRadius: 999, padding: 4,
+          display: 'flex', gap: 6, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.18)',
+          borderRadius: 999, padding: 4,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
         }}>
-          {[ultraDeviceId ? 0.5 : null, 1, 2, 3].filter(Boolean).map((level) => {
+          {zoomLevels.map((level) => {
             const active = level === displayZoom;
             return (
               <button
@@ -215,10 +242,10 @@ const CameraPreview = forwardRef(function CameraPreview({ overlay, facingMode = 
                 onClick={() => handleQuickZoom(level)}
                 style={{
                   border: 'none', borderRadius: 999, cursor: 'pointer',
-                  width: active ? 36 : 28, height: 28,
+                  width: active ? 36 : 30, height: 28,
                   background: active ? '#fff' : 'transparent',
                   color: active ? '#000' : '#fff',
-                  fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                  fontSize: 12, fontWeight: 800, fontFamily: 'inherit',
                   transition: 'all 0.15s ease',
                 }}
               >

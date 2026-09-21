@@ -15,7 +15,8 @@ export function clearAdminToken() {
 
 export async function apiFetch(path, { method = 'GET', body, auth = false } = {}) {
   const headers = { 'ngrok-skip-browser-warning': 'true' };
-  if (body) headers['Content-Type'] = 'application/json';
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body && !isFormData) headers['Content-Type'] = 'application/json';
   if (auth) {
     const token = getAdminToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -24,7 +25,7 @@ export async function apiFetch(path, { method = 'GET', body, auth = false } = {}
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
-    body: body ? JSON.stringify(body) : undefined,
+    body: isFormData ? body : (body ? JSON.stringify(body) : undefined),
   });
 
   if (!res.ok) {
