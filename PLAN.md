@@ -1,6 +1,6 @@
 # SnapPose — Tổng quan kế hoạch "Gợi ý pose bằng AI"
 
-> File này là tổng quan chung. Việc chi tiết tách riêng theo người làm — xem [PLAN_NGUYEN.md](PLAN_NGUYEN.md) (dataset/khung outline) và [PLAN_MINH.md](PLAN_MINH.md) (model so khớp + tích hợp backend).
+> File này là tổng quan chung. Việc chi tiết tách riêng theo người làm — xem [PLAN_NGUYEN.md](PLAN_NGUYEN.md) (dataset/khung outline) và [PLAN_MINH.md](PLAN_MINH.md) (model so khớp + tích hợp backend). Minh setup máy Mac theo [SETUP_MAC.md](SETUP_MAC.md) trước.
 
 ---
 
