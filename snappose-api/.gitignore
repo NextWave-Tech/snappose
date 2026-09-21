@@ -5,3 +5,8 @@ venv/
 .env
 uploads/*
 !uploads/.gitkeep
+dataset_preview/
+.pyembed/
+*.log
+scripts/_scratch_*
+scripts/_pose_landmarker_lite.task

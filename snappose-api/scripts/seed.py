@@ -10,8 +10,8 @@ Folder convention:
   Nếu folder name chưa có trong CATEGORY_NAMES → dùng folder name làm tên hiển thị.
 
 Run:
-  python -m scripts.seed              # skip if data already exists
-  python -m scripts.seed --reset      # drop poses + categories, re-seed
+  python -m scripts.seed              # incremental: chỉ thêm pose mới (theo tên), an toàn chạy lại nhiều lần
+  python -m scripts.seed --reset      # drop poses + categories, seed lại từ đầu
 """
 import os
 import re
@@ -125,16 +125,13 @@ def run(poses_dir: Path, reset: bool = False) -> None:
             db = SessionLocal()
             print("Reset: đã drop + recreate bảng poses + categories")
 
-        if db.query(Category).count() > 0:
-            print("Data đã tồn tại, dùng --reset để seed lại")
-            return
-
         if not poses_dir.exists():
             print(f"Không tìm thấy thư mục poses: {poses_dir.resolve()}")
-            print("Tạo categories trống (không có ảnh)")
-            for i, (slug, name) in enumerate(CATEGORY_NAMES.items()):
-                db.add(Category(slug=slug, name=name, sort_order=i))
-            db.commit()
+            if db.query(Category).count() == 0:
+                print("Tạo categories trống (không có ảnh)")
+                for i, (slug, name) in enumerate(CATEGORY_NAMES.items()):
+                    db.add(Category(slug=slug, name=name, sort_order=i))
+                db.commit()
             return
 
         # Scan ảnh
@@ -147,14 +144,26 @@ def run(poses_dir: Path, reset: bool = False) -> None:
             if folder_slug not in CATEGORY_NAMES:
                 all_slugs.append((folder_slug, folder_slug))  # dùng slug làm tên tạm
 
-        # Insert categories và poses
-        total_poses = 0
+        # Get-or-create categories, insert CHỈ pose chưa có trong DB (an toàn chạy lại nhiều lần —
+        # dùng cho việc "thêm dần" ảnh mới, không xoá/không đụng pose cũ)
+        total_new = 0
+        total_skipped = 0
         for i, (slug, name) in enumerate(all_slugs):
-            cat = Category(slug=slug, name=name, sort_order=i)
-            db.add(cat)
-            db.flush()
+            cat = db.query(Category).filter(Category.slug == slug).first()
+            if cat is None:
+                cat = Category(slug=slug, name=name, sort_order=i)
+                db.add(cat)
+                db.flush()
 
-            for j, pose in enumerate(pose_data.get(slug, [])):
+            existing_names = {
+                p.name for p in db.query(Pose).filter(Pose.category_id == cat.id)
+            }
+            next_sort = db.query(Pose).filter(Pose.category_id == cat.id).count()
+
+            for pose in pose_data.get(slug, []):
+                if pose["name"] in existing_names:
+                    total_skipped += 1
+                    continue
                 print(f"  Uploading {slug}/{pose['name']}...", end=" ", flush=True)
                 photo_url, skeleton_url = upload_pose_images(slug, pose)
                 db.add(Pose(
@@ -162,13 +171,14 @@ def run(poses_dir: Path, reset: bool = False) -> None:
                     name=pose["name"],
                     photo_url=photo_url,
                     skeleton_url=skeleton_url,
-                    sort_order=j,
+                    sort_order=next_sort,
                 ))
-                total_poses += 1
+                next_sort += 1
+                total_new += 1
                 print("OK")
 
         db.commit()
-        print(f"\nDone: {len(all_slugs)} categories, {total_poses} poses")
+        print(f"\nDone: +{total_new} pose mới, bỏ qua {total_skipped} pose đã có sẵn")
 
     finally:
         db.close()

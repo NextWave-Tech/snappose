@@ -1,5 +1,10 @@
-from fastapi import FastAPI
+from pathlib import Path
+
+import httpx
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, engine
@@ -27,3 +32,21 @@ app.include_router(admin_upload.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/snappose/{path:path}", include_in_schema=False)
+async def proxy_minio(path: str):
+    url = f"http://{settings.minio_endpoint}/snappose/{path}"
+    async with httpx.AsyncClient() as client:
+        r = await client.get(url)
+    return Response(content=r.content, media_type=r.headers.get("content-type", "image/png"))
+
+
+_DIST = Path(__file__).parent.parent.parent / "snappose-web" / "dist"
+
+if _DIST.exists():
+    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_spa(full_path: str):
+        return FileResponse(_DIST / "index.html")
