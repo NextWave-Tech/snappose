@@ -7,8 +7,8 @@ export default defineConfig({
   server: {
     allowedHosts: true,
     proxy: {
-      '/api': 'http://localhost:8083',
-      '/snappose': 'http://localhost:9000',
+      '/api': 'http://localhost:8000',
+      '/snappose': 'http://localhost:8000',
     },
   },
 })
