@@ -1,6 +1,7 @@
 # Việc của Nguyên — Xây thư viện ảnh + khung outline
 
 > Không cần làm phong phú ngay — thêm dần theo thời gian. Không phụ thuộc vào việc CLIP/matching của Minh, làm độc lập.
+> **Prompt generate ảnh (Gemini) + checklist kiểm tra chất lượng**: xem [POSE_GEN_GUIDE.md](POSE_GEN_GUIDE.md) — đọc file đó trước, quay lại đây để biết cách nạp ảnh vào hệ thống.
 
 ## Format thô — thoải mái đặt tên tự nhiên, có script tự đổi lại đúng chuẩn
 
