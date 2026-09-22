@@ -4,6 +4,7 @@ import { suggestPose } from '../api/poses';
 import { savePhotoToGallery } from './ArtGalleryScreen';
 import CameraPreview from '../components/CameraPreview';
 import PoseCarousel from '../components/PoseCarousel';
+import PoseOverlay from '../components/PoseOverlay';
 // import DirectorGuidance from '../components/DirectorGuidance';
 
 export default function CameraScreen({
@@ -87,27 +88,11 @@ export default function CameraScreen({
       <CameraPreview
         ref={previewRef}
         facingMode={facingMode}
-        overlay={currentPose?.skeleton_url ? (
-          <div style={{
-            position: 'absolute',
-            top: '6%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            pointerEvents: 'none',
-          }}>
-            <img
-              src={currentPose.skeleton_url}
-              alt=""
-              style={{
-                height: 440,
-                width: 'auto',
-                opacity: 0.9,
-                display: 'block',
-                filter: 'drop-shadow(0 0 2px white)',
-              }}
-            />
-          </div>
-        ) : null}
+        overlay={
+          <PoseOverlay
+            skeletonUrl={currentPose?.skeleton_url}
+          />
+        }
       />
 
       {/* AI Director Guidance temporarily disabled */}
