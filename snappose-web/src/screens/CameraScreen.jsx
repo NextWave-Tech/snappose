@@ -4,7 +4,7 @@ import { suggestPose } from '../api/poses';
 import { savePhotoToGallery } from './ArtGalleryScreen';
 import CameraPreview from '../components/CameraPreview';
 import PoseCarousel from '../components/PoseCarousel';
-import DirectorGuidance from '../components/DirectorGuidance';
+// import DirectorGuidance from '../components/DirectorGuidance';
 
 export default function CameraScreen({
   onCaptured,
@@ -15,7 +15,6 @@ export default function CameraScreen({
   const [poses, setPoses] = useState(initialPose ? [initialPose] : []);
   const [selectedPoseId, setSelectedPoseId] = useState(initialPose?.id ?? null);
   const [detectedEnvironment, setDetectedEnvironment] = useState(initialPose?.category_name ?? null);
-  const [directorEnabled, setDirectorEnabled] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [facingMode, setFacingMode] = useState('environment');
   const [flashing, setFlashing] = useState(false);
@@ -111,12 +110,7 @@ export default function CameraScreen({
         ) : null}
       />
 
-      {/* Real-time AI Director Guidance (Chỉ dẫn góc máy, khoảng cách, sang trái/phải/lên/xuống) */}
-      <DirectorGuidance
-        videoElement={videoEl}
-        activePose={currentPose}
-        enabled={directorEnabled}
-      />
+      {/* AI Director Guidance temporarily disabled */}
 
       {/* Top Floating Glass Header (iPhone Safe Area) */}
       <div style={{
@@ -167,33 +161,7 @@ export default function CameraScreen({
           </div>
         )}
 
-        {/* AI Director Toggle Button */}
-        {currentPose && (
-          <button
-            onClick={() => setDirectorEnabled(!directorEnabled)}
-            className="liquid-btn"
-            style={{
-              pointerEvents: 'auto',
-              padding: '6px 12px',
-              borderRadius: 18,
-              background: directorEnabled
-                ? 'linear-gradient(135deg, rgba(5, 150, 105, 0.5), rgba(16, 185, 129, 0.5))'
-                : 'rgba(20, 20, 28, 0.65)',
-              backdropFilter: 'blur(16px)',
-              border: '1px solid ' + (directorEnabled ? 'rgba(52, 211, 153, 0.6)' : 'rgba(255, 255, 255, 0.18)'),
-              color: '#fff',
-              fontSize: 11,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              cursor: 'pointer',
-            }}
-          >
-            <span>🎯</span>
-            <span>Chỉ dẫn: {directorEnabled ? 'BẬT' : 'TẮT'}</span>
-          </button>
-        )}
+
       </div>
 
       {/* Shutter Flash */}
