@@ -32,14 +32,32 @@ class CategoryUpdate(BaseModel):
 class PoseOut(BaseModel):
     id: int
     category_id: int
+    category_name: str | None = None
+    category_slug: str | None = None
     name: str
     photo_url: str
     skeleton_url: str
     sort_order: int
     is_active: bool
+    similarity: float | None = None
 
     class Config:
         from_attributes = True
+
+
+class EnvironmentScore(BaseModel):
+    id: int
+    name: str
+    slug: str
+    score: float
+    confidence_percent: float
+
+
+class MatchImageResponse(BaseModel):
+    detected_environment: EnvironmentScore | None = None
+    environments: list[EnvironmentScore] = []
+    matches: list[PoseOut] = []
+
 
 
 class PoseCreate(BaseModel):

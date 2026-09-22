@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Environment and SSL certs/keys
+*.pem
+*.key
+.env
+.env.local
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+*.swp

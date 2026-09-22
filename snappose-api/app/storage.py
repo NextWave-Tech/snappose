@@ -45,3 +45,20 @@ def upload(object_name: str, data: bytes, content_type: str) -> str:
 
 def public_url(object_name: str) -> str:
     return f"/{settings.minio_bucket}/{object_name}"
+
+
+def get_object_bytes(object_name: str) -> bytes:
+    response = _client().get_object(settings.minio_bucket, object_name)
+    try:
+        return response.read()
+    finally:
+        response.close()
+        response.release_conn()
+
+
+def delete_object(object_name: str) -> None:
+    try:
+        _client().remove_object(settings.minio_bucket, object_name)
+    except Exception:
+        pass
+
