@@ -6,16 +6,18 @@
 
 ## Quy trình 1 session = 1 dáng mới
 
-1. Mở 1 đoạn chat mới với Gemini, **đính kèm 2 ảnh mẫu** (1 ảnh gốc + 1 ảnh khung có sẵn, bất kỳ cặp nào trong `poses/{category}/`) — chỉ cần đính 1 lần đầu session.
-2. Chạy **Prompt 1** → ra ảnh gốc mới.
-3. Lấy ảnh vừa ra ở bước 2 làm input, chạy **Prompt 2** (trong cùng đoạn chat, không cần đính lại ảnh mẫu) → ra ảnh khung khớp dáng.
+**Ảnh gốc giờ lấy từ ảnh thật tìm trên mạng, không AI-generate nữa** (Prompt 1 cũ chuyển thành phương án dự phòng, xem cuối mục này):
+
+1. Tìm 1 ảnh đẹp, phù hợp bối cảnh category đang làm (biển/cà phê/...) trên mạng — rõ toàn thân, dáng rõ ràng, không bị che khuất nhiều.
+2. Mở 1 đoạn chat mới với Gemini, đính kèm **đúng 1 ảnh** vừa tìm được (không cần đính thêm ảnh khung mẫu nào — đã test, Prompt 2 tự ra đúng style mà không cần ảnh ví dụ).
+3. Chạy **Prompt 2** (bên dưới) → ra ảnh khung khớp đúng dáng trong ảnh vừa tìm.
 4. Tự kiểm tra theo **Checklist** bên dưới trước khi lưu.
-5. Lưu 2 ảnh, đặt tên tự nhiên kiểu `anh-N.jpg` + `anh-N-khung.jpg` (không cần đúng chuẩn ngay — xem [PLAN_NGUYEN.md](PLAN_NGUYEN.md) phần nạp vào hệ thống).
-6. Mở session mới (hoặc dùng lại session cũ), lặp lại từ bước 2 cho dáng tiếp theo.
+5. Lưu ảnh gốc (chính ảnh tìm được) + ảnh khung mới ra, đặt tên tự nhiên kiểu `anh-N.jpg` + `anh-N-khung.jpg` (không cần đúng chuẩn ngay — xem [PLAN_NGUYEN.md](PLAN_NGUYEN.md) phần nạp vào hệ thống).
+6. Lặp lại từ bước 1 cho dáng tiếp theo.
 
 ---
 
-## Prompt 1 — ảnh gốc (đơn giản)
+## Prompt 1 — ảnh gốc bằng AI (chỉ dùng khi không tìm được ảnh thật ưng ý)
 
 ```
 Here is a reference image from a photography pose-guide app: an original
@@ -37,11 +39,12 @@ orientation, candid photography look. No text, no watermark.
 
 ## Prompt 2 — ảnh khung (đã chốt sau nhiều vòng test, đầy đủ rule)
 
+**Chỉ cần đính đúng 1 ảnh (ảnh tìm được) — đã test, không cần ảnh khung mẫu tham chiếu, prompt tự đủ để ra đúng style:**
+
 ```
-Here is a new photo (the pose to convert). Using the same outline style
-example shown earlier in this conversation, redraw this new photo as a
-clean line-art outline drawing — a pure line illustration, NOT a photo
-cutout and NOT a silhouette with photo texture inside it.
+Here is a photo (the pose to convert). Redraw it as a clean line-art
+outline drawing — a pure line illustration, NOT a photo cutout and NOT a
+silhouette with photo texture inside it.
 
 Rules:
 - The person: draw ONLY as a white outline shape. The inside of the
@@ -71,10 +74,9 @@ Rules:
   color, no shading, no fill, no photographic texture anywhere, no text,
   no watermark.
 
-The final result must look exactly like the outline example shown earlier
-in technique — a pure white line drawing on black background, minimal and
-clean, showing ONLY the person plus the one object/surface they are
-directly holding or sitting on — nothing else in the frame.
+The final result must be a pure white line drawing on black background,
+minimal and clean, showing ONLY the person plus the one object/surface
+they are directly holding or sitting on — nothing else in the frame.
 ```
 
 ---
