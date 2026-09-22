@@ -64,8 +64,9 @@ export default function CameraScreen({
       // Suggest across all categories — AI detects the environment automatically
       const suggested = await suggestPose(dataUrl, null, 5);
       if (suggested && suggested.length > 0) {
-        setPoses(suggested);
-        const topPose = suggested[0];
+        const top5 = suggested.slice(0, 5);
+        setPoses(top5);
+        const topPose = top5[0];
         setDetectedEnvironment(topPose.category_name || 'Đã phát hiện');
         setSelectedPoseId(topPose.id);
       }
