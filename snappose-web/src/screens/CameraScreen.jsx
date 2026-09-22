@@ -91,6 +91,7 @@ export default function CameraScreen({
         overlay={
           <PoseOverlay
             skeletonUrl={currentPose?.skeleton_url}
+            opacity={0.5}
           />
         }
       />

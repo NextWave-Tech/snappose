@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 
 export default function PoseOverlay({
   skeletonUrl,
-  opacity = 0.9,
+  opacity = 0.5,
   onScaleChange,
 }) {
   const [scale, setScale] = useState(1.0);
