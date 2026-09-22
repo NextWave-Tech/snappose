@@ -60,4 +60,3 @@ Khi user bấm nút trên camera, app gửi 1 khung hình hiện tại lên, h�
         ▼ list 5 x { id, skeleton_url, category_id, ... }
 FE hiển thị 5 lựa chọn, user chọn 1 → overlay như cơ chế hiện có
 ```
-
