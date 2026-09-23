@@ -58,11 +58,12 @@ async function detectLenses(streamDeviceId, facingMode) {
   }
 }
 
+// w:h ratio — 4:3 portrait = width 3, height 4 (dọc dài hơn ngang)
 const ASPECT_RATIOS = [
   { id: 'full', label: 'Full', w: null, h: null },
-  { id: '4:3',  label: '4:3',  w: 4,    h: 3 },
-  { id: '3:4',  label: '3:4',  w: 3,    h: 4 },
+  { id: '4:3',  label: '4:3',  w: 3,    h: 4 },   // portrait: 3 ngang × 4 dọc
   { id: '1:1',  label: '1:1',  w: 1,    h: 1 },
+  { id: '16:9', label: '16:9', w: 9,    h: 16 },  // portrait 16:9 (dọc)
 ];
 
 /**
