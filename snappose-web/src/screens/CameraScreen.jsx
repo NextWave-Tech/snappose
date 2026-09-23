@@ -1,284 +1,438 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { COLORS } from '../constants/colors';
 import { suggestPose } from '../api/poses';
 import { savePhotoToGallery } from './ArtGalleryScreen';
-import CameraPreview from '../components/CameraPreview';
+import CameraPreview, { ASPECT_RATIOS } from '../components/CameraPreview';
 import PoseCarousel from '../components/PoseCarousel';
-import DirectorGuidance from '../components/DirectorGuidance';
+import PoseOverlay from '../components/PoseOverlay';
 
-export default function CameraScreen({
-  onCaptured,
-  lastPhotoUrl,
-  onViewLastPhoto,
-  initialPose,
-}) {
-  const [poses, setPoses] = useState(initialPose ? [initialPose] : []);
-  const [selectedPoseId, setSelectedPoseId] = useState(initialPose?.id ?? null);
-  const [detectedEnvironment, setDetectedEnvironment] = useState(initialPose?.category_name ?? null);
-  const [directorEnabled, setDirectorEnabled] = useState(true);
-  const [loadError, setLoadError] = useState(null);
-  const [facingMode, setFacingMode] = useState('environment');
-  const [flashing, setFlashing] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
-  const [videoEl, setVideoEl] = useState(null);
+/* ─── Tiny SVG Icons ──────────────────────────────────────────────────────── */
+const FlipIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 2l4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+    <path d="M7 22l-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" />
+  </svg>
+);
+const GridIcon = ({ on }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke={on ? COLORS.primary : 'rgba(255,255,255,0.6)'} strokeWidth="2" strokeLinecap="round">
+    <rect x="3" y="3" width="18" height="18" rx="1.5" />
+    <line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" />
+    <line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" />
+  </svg>
+);
+const StarIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+    <path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2z" />
+  </svg>
+);
+const ChevronIcon = ({ up }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+    style={{ transform: up ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
+    <path d="M6 9l6 6 6-6" />
+  </svg>
+);
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CAMERA SCREEN
+═══════════════════════════════════════════════════════════════════════════ */
+export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto, initialPose }) {
   const previewRef = useRef(null);
+  const bottomPanelRef = useRef(null);
 
-  // Grab the video DOM element once camera stream starts
+  /* Pose state */
+  const [poses, setPoses]               = useState(initialPose ? [initialPose] : []);
+  const [selectedPoseId, setSelectedPoseId] = useState(initialPose?.id ?? null);
+  const [detectedEnv, setDetectedEnv]   = useState(initialPose?.category_name ?? null);
+  const [suggesting, setSuggesting]     = useState(false);
+  const [loadError, setLoadError]       = useState(null);
+
+  /* Camera state */
+  const [facingMode, setFacingMode]     = useState('environment');
+  const [flashing, setFlashing]         = useState(false);
+
+  /* Lens & Zoom */
+  const [lenses, setLenses]             = useState([]);
+  const [activeLensId, setActiveLensId] = useState(null);
+  const [currentZoom, setCurrentZoom]   = useState(1);
+
+  /* UI toggles */
+  const [showGrid, setShowGrid]         = useState(false);
+  const [arIndex, setArIndex]           = useState(0);
+  const [poseDrawerOpen, setPoseDrawerOpen] = useState(true);
+  const [mode, setMode]                 = useState('POSE'); // TỰ DO | POSE | VIDEO
+
+  /* Dynamic safe height for camera frame */
+  const [bottomOffset, setBottomOffset] = useState(250);
+
+  const currentAr   = ASPECT_RATIOS[arIndex];
+  const currentPose = poses.find((p) => p.id === selectedPoseId) || poses[0];
+
+  const availableZooms = facingMode === 'user' ? [0.5, 1, 2] : [0.5, 1, 2, 3];
+
+  // Measure bottom panel height so viewfinder frame NEVER touches buttons
   useEffect(() => {
-    const timer = setInterval(() => {
-      const el = previewRef.current?.getVideo();
-      if (el) {
-        setVideoEl(el);
-        clearInterval(timer);
-      }
-    }, 300);
-    return () => clearInterval(timer);
-  }, [facingMode]);
+    const el = bottomPanelRef.current;
+    if (!el) return;
+    const update = () => {
+      const h = el.offsetHeight;
+      if (h > 0) setBottomOffset(h);
+    };
+    update();
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [poses.length, poseDrawerOpen]);
 
-  const currentPose = useMemo(
-    () => poses.find((p) => p.id === selectedPoseId) || poses[0],
-    [poses, selectedPoseId]
-  );
+  /* ── Lens detection ──────────────────────────────────────────────────── */
+  const handleLensesReady = useCallback((detected) => {
+    setLenses(detected);
+    const main = detected.find((d) => d.level === 1) || detected[0];
+    if (main) setActiveLensId(main.deviceId);
+  }, []);
+
+  const handleSelectZoom = (lvl) => {
+    setCurrentZoom(lvl);
+    previewRef.current?.applyZoom(lvl);
+  };
+
+  const cycleZoom = () => {
+    const idx = availableZooms.indexOf(currentZoom);
+    const nextIdx = (idx + 1) % availableZooms.length;
+    handleSelectZoom(availableZooms[nextIdx]);
+  };
+
+  /* ── Camera ─────────────────────────────────────────────────────────── */
+  const handleFlip = () => {
+    setFacingMode((m) => (m === 'user' ? 'environment' : 'user'));
+    setLenses([]);
+    setActiveLensId(null);
+    setCurrentZoom(1);
+  };
 
   const handleCapture = () => {
     const dataUrl = previewRef.current?.capture();
     if (!dataUrl) return;
     setFlashing(true);
-
-    // Save automatically to user's Art Gallery silently (no toast as requested)
-    savePhotoToGallery(dataUrl, detectedEnvironment || 'Tự do');
-
-    setTimeout(() => {
-      setFlashing(false);
-      onCaptured(dataUrl);
-    }, 250);
+    savePhotoToGallery(dataUrl, detectedEnv || 'Tự do');
+    setTimeout(() => { setFlashing(false); onCaptured(dataUrl); }, 250);
   };
 
+  /* ── AI Suggest ─────────────────────────────────────────────────────── */
   const handleSuggest = async () => {
     const dataUrl = previewRef.current?.capture();
     if (!dataUrl) return;
     setSuggesting(true);
     setLoadError(null);
     try {
-      // Suggest across all categories — AI detects the environment automatically
       const suggested = await suggestPose(dataUrl, null, 5);
-      if (suggested && suggested.length > 0) {
-        setPoses(suggested);
-        const topPose = suggested[0];
-        setDetectedEnvironment(topPose.category_name || 'Đã phát hiện');
-        setSelectedPoseId(topPose.id);
+      if (suggested?.length > 0) {
+        const top5 = suggested.slice(0, 5);
+        setPoses(top5);
+        setSelectedPoseId(top5[0].id);
+        setDetectedEnv(top5[0].category_name || 'Đã phát hiện');
+        setPoseDrawerOpen(true);
       }
     } catch (err) {
-      setLoadError('Gợi ý pose thất bại: ' + err.message);
+      setLoadError('Gợi ý thất bại: ' + (err.message || err));
     } finally {
       setSuggesting(false);
     }
   };
 
+  const cycleAr = () => setArIndex((i) => (i + 1) % ASPECT_RATIOS.length);
+
+  /* ══════════════════════════════════════════════════════════════════════
+     RENDER
+  ══════════════════════════════════════════════════════════════════════ */
   return (
-    <div style={{
-      height: '100%',
-      position: 'relative',
-      background: '#000',
-      overflow: 'hidden',
-    }}>
-      {/* Live Camera Viewport */}
+    <div style={{ height: '100%', position: 'relative', background: '#060E1A', overflow: 'hidden' }}>
+
+      {/* ── Camera Feed & Viewfinder Frame (positioned safely above buttons) ── */}
       <CameraPreview
         ref={previewRef}
         facingMode={facingMode}
-        overlay={currentPose?.skeleton_url ? (
-          <div style={{
-            position: 'absolute',
-            top: '6%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            pointerEvents: 'none',
-          }}>
-            <img
-              src={currentPose.skeleton_url}
-              alt=""
-              style={{
-                height: 440,
-                width: 'auto',
-                opacity: 0.9,
-                display: 'block',
-                filter: 'drop-shadow(0 0 2px white)',
-              }}
-            />
-          </div>
-        ) : null}
+        showGrid={showGrid}
+        aspectRatio={currentAr.id}
+        activeLensId={activeLensId}
+        topOffset={58}
+        bottomOffset={bottomOffset}
+        onLensesReady={handleLensesReady}
+        onZoomChange={setCurrentZoom}
+        overlay={mode === 'POSE' ? <PoseOverlay skeletonUrl={currentPose?.skeleton_url} /> : null}
       />
 
-      {/* Real-time AI Director Guidance (Chỉ dẫn góc máy, khoảng cách, sang trái/phải/lên/xuống) */}
-      <DirectorGuidance
-        videoElement={videoEl}
-        activePose={currentPose}
-        enabled={directorEnabled}
-      />
+      {/* ── Shutter Flash ───────────────────────────────────────────── */}
+      {flashing && (
+        <div style={{ position: 'absolute', inset: 0, background: '#fff', zIndex: 80,
+          animation: 'flash 0.3s ease-out forwards' }} />
+      )}
 
-      {/* Top Floating Glass Header (iPhone Safe Area) */}
+      {/* ══════════════════════════════════════════════════════════════
+          TOP BAR  (like DSLR status strip)
+      ══════════════════════════════════════════════════════════════ */}
       <div style={{
         position: 'absolute',
-        top: 'max(14px, env(safe-area-inset-top))',
-        left: 16,
-        right: 16,
-        zIndex: 35,
+        top: 0, left: 0, right: 0,
+        zIndex: 40,
+        paddingTop: 'max(14px, env(safe-area-inset-top))',
+        paddingInline: 14,
+        paddingBottom: 8,
+        background: 'linear-gradient(to bottom, rgba(6,14,26,0.92) 0%, rgba(6,14,26,0.6) 75%, transparent 100%)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        pointerEvents: 'none',
+        gap: 8,
       }}>
-        {/* Environment Badge */}
-        {detectedEnvironment ? (
-          <div
-            className="liquid-glass-pill"
-            style={{
-              pointerEvents: 'auto',
-              padding: '6px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'linear-gradient(135deg, rgba(30, 27, 75, 0.8), rgba(15, 23, 42, 0.8))',
-              border: '1px solid rgba(255, 255, 255, 0.25)',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-              animation: 'fadeIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)',
-            }}
-          >
-            <span style={{ fontSize: 13 }}>✨</span>
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>
-              Môi trường: {detectedEnvironment}
-            </span>
+        {/* Left: mode badge + env */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <div style={{
+            background: `linear-gradient(135deg, ${COLORS.primaryDark}, ${COLORS.primaryDeep})`,
+            color: '#fff', fontSize: 9, fontWeight: 900,
+            padding: '3px 8px', borderRadius: 5, letterSpacing: '0.1em',
+            boxShadow: `0 0 10px ${COLORS.primaryGlow}`,
+          }}>
+            SNAP
           </div>
-        ) : (
-          <div
-            className="liquid-glass-pill"
-            style={{
-              pointerEvents: 'auto',
-              padding: '6px 12px',
-              background: 'rgba(0, 0, 0, 0.5)',
-              border: '1px solid rgba(255, 255, 255, 0.12)',
-            }}
-          >
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
-              Bấm ⭐ để AI gợi ý pose
+          {detectedEnv ? (
+            <div style={{
+              background: 'rgba(56,189,248,0.12)',
+              border: `1px solid ${COLORS.glassBorder}`,
+              borderRadius: 6, padding: '3px 9px',
+              fontSize: 10, fontWeight: 700, color: COLORS.primary,
+              animation: 'fadeIn 0.2s ease',
+            }}>
+              ✨ {detectedEnv}
+            </div>
+          ) : (
+            <span style={{ fontSize: 10, color: 'rgba(186,230,253,0.5)', fontWeight: 500 }}>
+              {mode === 'POSE' ? 'Bấm ★ để AI gợi ý' : 'Chế độ tự do'}
             </span>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* AI Director Toggle Button */}
-        {currentPose && (
-          <button
-            onClick={() => setDirectorEnabled(!directorEnabled)}
-            className="liquid-btn"
+        {/* Right: current pose name + flip */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {currentPose && mode === 'POSE' && (
+            <span style={{ fontSize: 10, color: 'rgba(186,230,253,0.65)', fontWeight: 600, maxWidth: 90,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentPose.name || '—'}
+            </span>
+          )}
+          <button onClick={handleFlip} className="liquid-btn" aria-label="Flip"
             style={{
-              pointerEvents: 'auto',
-              padding: '6px 12px',
-              borderRadius: 18,
-              background: directorEnabled
-                ? 'linear-gradient(135deg, rgba(5, 150, 105, 0.5), rgba(16, 185, 129, 0.5))'
-                : 'rgba(20, 20, 28, 0.65)',
-              backdropFilter: 'blur(16px)',
-              border: '1px solid ' + (directorEnabled ? 'rgba(52, 211, 153, 0.6)' : 'rgba(255, 255, 255, 0.18)'),
-              color: '#fff',
-              fontSize: 11,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
+              width: 34, height: 34, borderRadius: 17,
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.14)',
+              color: 'rgba(255,255,255,0.8)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
               cursor: 'pointer',
-            }}
-          >
-            <span>🎯</span>
-            <span>Chỉ dẫn: {directorEnabled ? 'BẬT' : 'TẮT'}</span>
+            }}>
+            <FlipIcon />
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Shutter Flash */}
-      {flashing && (
-        <div style={{ position: 'absolute', inset: 0, background: '#fff', zIndex: 50, animation: 'flash 0.3s ease-out forwards' }} />
-      )}
-
-      {/* Error Message */}
+      {/* ══════════════════════════════════════════════════════════════
+          ERROR TOAST
+      ══════════════════════════════════════════════════════════════ */}
       {loadError && (
         <div style={{
-          position: 'absolute',
-          top: 'calc(max(14px, env(safe-area-inset-top)) + 90px)',
-          left: 16,
-          right: 16,
-          zIndex: 40,
-          background: 'rgba(220, 38, 38, 0.88)',
-          color: '#fff',
-          padding: '10px 14px',
-          borderRadius: 14,
-          fontSize: 13,
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255,255,255,0.2)',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          position: 'absolute', top: 'calc(max(14px,env(safe-area-inset-top)) + 52px)',
+          left: 14, right: 14, zIndex: 50,
+          background: 'rgba(190,18,60,0.9)', backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,100,130,0.4)', borderRadius: 10,
+          padding: '9px 13px', color: '#fff', fontSize: 12, fontWeight: 600,
+          animation: 'fadeIn 0.2s ease',
         }}>
           {loadError}
         </div>
       )}
 
-      {/* Bottom Controls — Clean & Minimalist */}
-      <div style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 30,
-        padding: '0 16px calc(76px + env(safe-area-inset-bottom))',
-        background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.3) 65%, transparent 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-      }}>
-        {/* Suggested Poses Carousel */}
+      {/* ══════════════════════════════════════════════════════════════
+          BOTTOM FUNCTIONAL PANEL — measured to keep viewfinder clear
+      ══════════════════════════════════════════════════════════════ */}
+      <div
+        ref={bottomPanelRef}
+        style={{
+          position: 'absolute',
+          left: 0, right: 0, bottom: 0,
+          zIndex: 35,
+          background: 'linear-gradient(to top, rgba(6,14,26,0.98) 0%, rgba(6,14,26,0.88) 75%, transparent 100%)',
+          paddingBottom: 'calc(68px + env(safe-area-inset-bottom))',
+          display: 'flex', flexDirection: 'column', gap: 0,
+        }}
+      >
+        {/* ── 1. POSE DRAWER (collapsible) ─────────────────────────── */}
         {poses.length > 0 && (
-          <div
-            className="liquid-glass-card"
-            style={{
-              padding: '8px 8px 6px',
-              borderRadius: 20,
-              background: 'rgba(15, 15, 20, 0.72)',
-            }}
-          >
-            <PoseCarousel
-              poses={poses}
-              selectedId={selectedPoseId}
-              onSelect={setSelectedPoseId}
-            />
+          <div style={{
+            marginInline: 12,
+            marginBottom: 6,
+            background: 'rgba(6,14,26,0.85)',
+            backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
+            border: `1px solid ${COLORS.glassBorder}`,
+            borderRadius: 18,
+            overflow: 'hidden',
+            boxShadow: `0 -4px 20px rgba(56,189,248,0.08), 0 8px 30px rgba(0,0,0,0.5)`,
+            animation: 'fadeInUp 0.25s ease',
+          }}>
+            {/* Drawer header — tap to toggle */}
+            <button
+              onClick={() => setPoseDrawerOpen((o) => !o)}
+              style={{
+                width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '9px 12px 8px',
+                color: '#fff',
+              }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{
+                  width: 6, height: 6, borderRadius: 3,
+                  background: COLORS.accent,
+                  boxShadow: `0 0 6px ${COLORS.accentGlow}`,
+                }} />
+                <span style={{
+                  fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
+                  color: COLORS.primary, textTransform: 'uppercase',
+                }}>
+                  {poses.length} gợi ý phù hợp nhất
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4,
+                color: 'rgba(186,230,253,0.6)', fontSize: 10, fontWeight: 600 }}>
+                {poseDrawerOpen ? 'Thu gọn' : 'Mở ra'}
+                <ChevronIcon up={poseDrawerOpen} />
+              </div>
+            </button>
+
+            {/* Carousel — collapsible */}
+            <div style={{
+              maxHeight: poseDrawerOpen ? 110 : 0,
+              overflow: 'hidden',
+              transition: 'max-height 0.28s cubic-bezier(0.4,0,0.2,1)',
+            }}>
+              <div style={{ padding: '0 10px 10px' }}>
+                <PoseCarousel
+                  poses={poses}
+                  selectedId={selectedPoseId}
+                  onSelect={setSelectedPoseId}
+                />
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Action Buttons: AI Suggest + Big Capture Button */}
+        {/* ── 2. LENS SELECTOR (natural position, never overlaps buttons) ── */}
         <div style={{
           display: 'flex',
+          justifyContent: 'center',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '4px 10px',
+          paddingTop: 3,
+          paddingBottom: 4,
         }}>
-          {/* Left: Last Photo Preview Button */}
-          <div style={{ width: 48, display: 'flex', justifyContent: 'flex-start' }}>
+          <div style={{
+            display: 'flex',
+            gap: 4,
+            alignItems: 'center',
+            background: 'rgba(6, 14, 26, 0.85)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: `1px solid ${COLORS.glassBorder}`,
+            borderRadius: 999,
+            padding: '3px 6px',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.45)',
+          }}>
+            {availableZooms.map((lvl) => {
+              const isActive = currentZoom === lvl;
+              return (
+                <button
+                  key={lvl}
+                  onClick={() => handleSelectZoom(lvl)}
+                  style={{
+                    border: 'none',
+                    borderRadius: 999,
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    background: isActive ? COLORS.primary : 'transparent',
+                    color: isActive ? '#060E1A' : 'rgba(186, 230, 253, 0.85)',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    fontFamily: 'inherit',
+                    letterSpacing: '0.02em',
+                    transition: 'all 0.15s ease',
+                    boxShadow: isActive ? `0 0 12px ${COLORS.primaryGlow}` : 'none',
+                  }}
+                >
+                  {lvl}x
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── 3. PARAMETER STRIP (like DSLR) ────────────────────────── */}
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          paddingInline: 16,
+          paddingBottom: 4,
+          paddingTop: 2,
+          gap: 0,
+          overflowX: 'auto', scrollbarWidth: 'none',
+          borderBottom: '1px solid rgba(255,255,255,0.06)',
+        }}>
+          {/* Frame ratio */}
+          <ParamChip
+            label="FRAME"
+            value={currentAr.label}
+            active={currentAr.id !== 'full'}
+            onClick={cycleAr}
+          />
+          <ParamDivider />
+          {/* Grid */}
+          <ParamChip
+            label="GRID"
+            value={showGrid ? 'ON' : 'OFF'}
+            active={showGrid}
+            onClick={() => setShowGrid((g) => !g)}
+            icon={<GridIcon on={showGrid} />}
+          />
+          <ParamDivider />
+          {/* Lens active */}
+          <ParamChip
+            label="LENS"
+            value={`${currentZoom}x`}
+            active={currentZoom !== 1}
+            onClick={cycleZoom}
+          />
+          <ParamDivider />
+          {/* Mode */}
+          <ParamChip
+            label="MODE"
+            value={mode}
+            active={true}
+          />
+        </div>
+
+        {/* ── 4. MAIN CONTROLS ROW ───────────────────────────────────── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          paddingInline: 22,
+          paddingTop: 12,
+          paddingBottom: 4,
+        }}>
+
+          {/* Left: Last photo thumbnail */}
+          <div style={{ width: 52, display: 'flex', justifyContent: 'flex-start' }}>
             {lastPhotoUrl ? (
-              <button
-                onClick={onViewLastPhoto}
-                className="liquid-btn"
-                aria-label="Xem ảnh vừa chụp"
+              <button onClick={onViewLastPhoto} className="liquid-btn" aria-label="Xem ảnh"
                 style={{
-                  width: 46,
-                  height: 46,
-                  borderRadius: 14,
-                  padding: 0,
-                  cursor: 'pointer',
-                  border: '2px solid rgba(255, 255, 255, 0.6)',
-                  overflow: 'hidden',
-                  flexShrink: 0,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                }}
-              >
+                  width: 48, height: 48, borderRadius: 12, padding: 0,
+                  border: `2px solid rgba(56,189,248,0.4)`,
+                  overflow: 'hidden', cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
+                }}>
                 <img src={lastPhotoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               </button>
             ) : (
@@ -286,47 +440,39 @@ export default function CameraScreen({
             )}
           </div>
 
-          {/* Center: AI Suggest (⭐) & Capture Button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+          {/* Center: AI ★ + Shutter (side by side) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+
+            {/* AI Suggest Button — left of shutter */}
             <button
               onClick={handleSuggest}
               disabled={suggesting}
               className="liquid-btn"
-              aria-label="Gợi ý pose bằng AI"
-              title="Gợi ý pose bằng AI"
+              aria-label="AI gợi ý pose"
               style={{
-                width: 50,
-                height: 50,
-                borderRadius: 25,
+                width: 54, height: 54, borderRadius: 27,
                 background: suggesting
-                  ? 'rgba(255, 255, 255, 0.08)'
-                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(217, 70, 239, 0.4))',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1.5px solid rgba(255, 255, 255, 0.35)',
-                color: '#fff',
+                  ? 'rgba(244,114,182,0.08)'
+                  : `linear-gradient(135deg, rgba(244,114,182,0.35), rgba(236,72,153,0.2))`,
+                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                border: `1.5px solid ${suggesting ? 'rgba(244,114,182,0.15)' : 'rgba(244,114,182,0.6)'}`,
+                color: COLORS.accent,
                 cursor: suggesting ? 'wait' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0,
-                boxShadow: '0 8px 24px rgba(99, 102, 241, 0.35), inset 0 1px 1.5px rgba(255, 255, 255, 0.4)',
+                boxShadow: suggesting ? 'none'
+                  : `0 0 18px ${COLORS.accentGlow}, 0 4px 16px rgba(0,0,0,0.4), inset 0 1px 1px rgba(255,255,255,0.2)`,
               }}
             >
               {suggesting ? (
                 <div style={{
-                  width: 20,
-                  height: 20,
-                  border: '2.5px solid rgba(255, 255, 255, 0.3)',
-                  borderTopColor: '#fff',
+                  width: 20, height: 20,
+                  border: '2.5px solid rgba(244,114,182,0.25)',
+                  borderTopColor: COLORS.accent,
                   borderRadius: '50%',
-                  animation: 'spin 0.8s linear infinite',
+                  animation: 'spin 0.7s linear infinite',
                 }} />
-              ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2z" />
-                </svg>
-              )}
+              ) : <StarIcon />}
             </button>
 
             {/* Shutter Button */}
@@ -335,51 +481,98 @@ export default function CameraScreen({
               className="liquid-btn"
               aria-label="Chụp ảnh"
               style={{
-                width: 78,
-                height: 78,
-                borderRadius: 39,
-                background: '#ffffff',
-                border: `4px solid ${COLORS.accent}`,
-                cursor: 'pointer',
-                flexShrink: 0,
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 4px rgba(255, 255, 255, 0.25)',
-              }}
-            />
-          </div>
-
-          {/* Right: Camera Switch Button */}
-          <div style={{ width: 48, display: 'flex', justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => setFacingMode((m) => (m === 'user' ? 'environment' : 'user'))}
-              className="liquid-btn"
-              aria-label="Đổi camera trước/sau"
-              style={{
-                width: 46,
-                height: 46,
-                borderRadius: 23,
-                background: 'rgba(255, 255, 255, 0.12)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                color: '#fff',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)',
+                width: 78, height: 78, borderRadius: 39,
+                background: '#fff',
+                border: `4px solid ${COLORS.primaryDark}`,
+                cursor: 'pointer', flexShrink: 0, padding: 0,
+                boxShadow: `0 0 0 5px rgba(56,189,248,0.18), 0 10px 32px rgba(0,0,0,0.6)`,
+                position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 2l4 4-4 4" />
-                <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
-                <path d="M7 22l-4-4 4-4" />
-                <path d="M21 13v1a4 4 0 0 1-4 4H3" />
-              </svg>
+              {/* Red center dot (like ProCamera) */}
+              <div style={{
+                width: 20, height: 20, borderRadius: 10,
+                background: `radial-gradient(circle at 40% 35%, #ff6b6b, #dc2626)`,
+                boxShadow: '0 2px 8px rgba(220,38,38,0.6)',
+              }} />
+            </button>
+
+          </div>
+
+          {/* Right: Flip */}
+          <div style={{ width: 52, display: 'flex', justifyContent: 'flex-end' }}>
+            <button onClick={handleFlip} className="liquid-btn" aria-label="Đổi camera"
+              style={{
+                width: 48, height: 48, borderRadius: 24,
+                background: 'rgba(255,255,255,0.07)',
+                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(255,255,255,0.14)',
+                color: 'rgba(255,255,255,0.8)',
+                cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+              }}>
+              <FlipIcon />
             </button>
           </div>
+        </div>
+
+        {/* ── 5. MODE SELECTOR (like AUTO | MANUAL | CINEMA) ─────────── */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          gap: 0, paddingTop: 8,
+        }}>
+          {['TỰ DO', 'POSE', 'VIDEO'].map((m) => {
+            const isActive = mode === m;
+            return (
+              <button key={m} onClick={() => setMode(m)}
+                style={{
+                  border: 'none', background: 'transparent', cursor: 'pointer',
+                  padding: '4px 20px', fontFamily: 'inherit',
+                  fontSize: 11, fontWeight: isActive ? 800 : 500,
+                  color: isActive ? COLORS.primary : 'rgba(186,230,253,0.45)',
+                  letterSpacing: '0.06em',
+                  borderBottom: isActive ? `2px solid ${COLORS.primary}` : '2px solid transparent',
+                  transition: 'all 0.2s ease',
+                  paddingBottom: 6,
+                }}>
+                {m}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
   );
+}
+
+/* ── Parameter chip (like DSLR strip) ──────────────────────────────────── */
+function ParamChip({ label, value, active, onClick, icon }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        background: 'transparent', border: 'none', cursor: onClick ? 'pointer' : 'default',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        padding: '3px 14px', gap: 2, flexShrink: 0,
+      }}>
+      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
+        color: 'rgba(186,230,253,0.45)', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {icon}
+        <span style={{
+          fontSize: 13, fontWeight: 800, letterSpacing: '0.03em',
+          color: active ? COLORS.primary : 'rgba(255,255,255,0.85)',
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {value}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function ParamDivider() {
+  return <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />;
 }
