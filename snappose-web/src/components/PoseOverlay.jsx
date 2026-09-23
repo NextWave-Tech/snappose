@@ -1,37 +1,80 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { COLORS } from '../constants/colors';
 
-export default function PoseOverlay({
-  skeletonUrl,
-  opacity = 0.5,
-  onScaleChange,
-}) {
-  const [scale, setScale] = useState(1.0);
-  const [offsetY, setOffsetY] = useState(0);
-  const [showControls, setShowControls] = useState(true);
+/**
+ * PoseOverlay — renders skeleton guide over camera feed.
+ * Features:
+ *  - Auto-scale: measures container + image natural dimensions → computes fit scale
+ *  - Manual ± controls to fine-tune
+ *  - Full opacity (no blur)
+ */
+export default function PoseOverlay({ skeletonUrl }) {
+  const containerRef = useRef(null);
+  const imgRef = useRef(null);
+  const [manualDelta, setManualDelta] = useState(0); // additive tweak on top of auto scale
+  const [autoScale, setAutoScale] = useState(1);
+  const [imgLoaded, setImgLoaded] = useState(false);
 
-  // Reset scale and offset when skeletonUrl changes
+  // Compute auto-scale once image loads or container resizes
+  const computeScale = useCallback(() => {
+    const container = containerRef.current;
+    const img = imgRef.current;
+    if (!container || !img || !img.naturalWidth) return;
+
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    const iw = img.naturalWidth;
+    const ih = img.naturalHeight;
+
+    if (!cw || !ch || !iw || !ih) return;
+
+    // Fit inside container, respecting aspect ratio (contain logic)
+    const scaleW = cw / iw;
+    const scaleH = ch / ih;
+    const fit = Math.min(scaleW, scaleH);
+    setAutoScale(fit);
+  }, []);
+
+  // Recompute when image changes
   useEffect(() => {
-    setScale(1.0);
-    setOffsetY(0);
+    setImgLoaded(false);
+    setManualDelta(0);
+    setAutoScale(1);
   }, [skeletonUrl]);
 
-  const handleZoomIn = (e) => {
-    e.stopPropagation();
-    setScale((prev) => Math.min(1.8, Math.round((prev + 0.1) * 10) / 10));
+  // ResizeObserver on container
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => computeScale());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [computeScale]);
+
+  const handleImageLoad = () => {
+    setImgLoaded(true);
+    computeScale();
   };
 
-  const handleZoomOut = (e) => {
+  const finalScale = Math.max(0.3, Math.min(2.5, autoScale + manualDelta));
+
+  const bump = (dir) => (e) => {
     e.stopPropagation();
-    setScale((prev) => Math.max(0.5, Math.round((prev - 0.1) * 10) / 10));
+    setManualDelta((prev) => {
+      const next = prev + dir * 0.08;
+      return Math.round(next * 1000) / 1000;
+    });
   };
 
-  const handleReset = (e) => {
+  const resetManual = (e) => {
     e.stopPropagation();
-    setScale(1.0);
-    setOffsetY(0);
+    setManualDelta(0);
   };
 
   if (!skeletonUrl) return null;
+
+  const pct = Math.round(finalScale * 100);
+  const isDirty = Math.abs(manualDelta) > 0.01;
 
   return (
     <div
@@ -42,35 +85,38 @@ export default function PoseOverlay({
         zIndex: 10,
       }}
     >
-      {/* Responsive Pose Skeleton Frame that fits screen dimensions */}
+      {/* Image container — full viewport, image centred */}
       <div
+        ref={containerRef}
         style={{
           position: 'absolute',
-          top: '8%',
-          bottom: '24%',
-          left: '6%',
-          right: '6%',
+          top: '7%',
+          bottom: '20%',
+          left: 0,
+          right: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          pointerEvents: 'none',
+          overflow: 'hidden',
         }}
       >
         <img
+          ref={imgRef}
           src={skeletonUrl}
           alt="Pose guide"
+          onLoad={handleImageLoad}
           style={{
-            maxHeight: '100%',
-            maxWidth: '100%',
-            height: 'auto',
-            width: 'auto',
-            objectFit: 'contain',
-            transform: `scale(${scale}) translateY(${offsetY}px)`,
-            transformOrigin: 'center center',
-            opacity: opacity,
             display: 'block',
-            filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.75))',
-            transition: 'transform 0.12s ease-out',
+            // Use natural size then scale — avoids CSS contain artefacts
+            width: imgRef.current?.naturalWidth || 'auto',
+            height: imgRef.current?.naturalHeight || 'auto',
+            maxWidth: 'none',
+            maxHeight: 'none',
+            transform: `scale(${finalScale})`,
+            transformOrigin: 'center center',
+            opacity: imgLoaded ? 1 : 0,
+            transition: 'opacity 0.2s ease, transform 0.12s ease-out',
+            filter: 'drop-shadow(0 0 3px rgba(56,189,248,0.6))',
             userSelect: 'none',
             WebkitUserSelect: 'none',
             pointerEvents: 'none',
@@ -78,134 +124,100 @@ export default function PoseOverlay({
         />
       </div>
 
-      {/* Floating Resize & Fit Control Module */}
+      {/* Scale control panel — right side */}
       <div
         style={{
           position: 'absolute',
-          right: 14,
-          top: '35%',
+          right: 10,
+          top: '40%',
           transform: 'translateY(-50%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 6,
-          background: 'rgba(15, 15, 20, 0.68)',
+          gap: 5,
+          background: 'rgba(6, 14, 26, 0.72)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255, 255, 255, 0.18)',
-          borderRadius: 24,
+          border: `1px solid ${COLORS.glassBorder}`,
+          borderRadius: 22,
           padding: '8px 5px',
-          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+          boxShadow: `0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(56,189,248,0.1)`,
           pointerEvents: 'auto',
           zIndex: 25,
           userSelect: 'none',
+          minWidth: 40,
         }}
       >
-        {/* Resize Icon / Label */}
-        <div
-          onClick={() => setShowControls((prev) => !prev)}
-          title="Thu phóng khung dáng"
-          style={{
-            fontSize: 10,
-            color: 'rgba(255, 255, 255, 0.75)',
-            fontWeight: 700,
-            cursor: 'pointer',
-            padding: '2px 4px',
-            textAlign: 'center',
-          }}
-        >
-          ⤢
+        {/* Auto badge */}
+        <div style={{
+          fontSize: 8,
+          fontWeight: 800,
+          color: isDirty ? COLORS.accent : COLORS.primary,
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+          padding: '1px 2px',
+        }}>
+          {isDirty ? 'TUNE' : 'AUTO'}
         </div>
 
-        {/* Zoom In Button */}
+        {/* Zoom In */}
         <button
-          onClick={handleZoomIn}
-          aria-label="Phóng to khung"
-          title="Phóng to khung dáng"
+          onClick={bump(1)}
+          aria-label="Phóng to"
           style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            background: 'rgba(255, 255, 255, 0.14)',
-            color: '#fff',
-            fontSize: 16,
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            width: 32, height: 32, borderRadius: 16,
+            border: `1px solid ${COLORS.glassBorder}`,
+            background: 'rgba(56,189,248,0.12)',
+            color: '#fff', fontSize: 17, fontWeight: 'bold',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
-            transition: 'background 0.15s',
+          }}
+        >+</button>
+
+        {/* % display, tap to reset */}
+        <button
+          onClick={resetManual}
+          title="Reset về auto-fit"
+          style={{
+            border: 'none', background: 'transparent',
+            color: isDirty ? COLORS.accent : 'rgba(255,255,255,0.85)',
+            fontSize: 10, fontWeight: 800,
+            cursor: 'pointer', minWidth: 32, textAlign: 'center', padding: '1px 0',
           }}
         >
-          +
+          {pct}%
         </button>
 
-        {/* Current Scale Display / Click to reset */}
+        {/* Zoom Out */}
         <button
-          onClick={handleReset}
-          title="Nhấn để đưa về kích thước chuẩn Fit màn hình"
+          onClick={bump(-1)}
+          aria-label="Thu nhỏ"
           style={{
-            border: 'none',
-            background: 'transparent',
-            color: scale === 1.0 ? 'rgba(255, 255, 255, 0.9)' : '#60a5fa',
-            fontSize: 10,
-            fontWeight: 800,
-            padding: '2px 0',
+            width: 32, height: 32, borderRadius: 16,
+            border: `1px solid ${COLORS.glassBorder}`,
+            background: 'rgba(56,189,248,0.12)',
+            color: '#fff', fontSize: 17, fontWeight: 'bold',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
-            minWidth: 32,
-            textAlign: 'center',
           }}
-        >
-          {Math.round(scale * 100)}%
-        </button>
+        >−</button>
 
-        {/* Zoom Out Button */}
-        <button
-          onClick={handleZoomOut}
-          aria-label="Thu nhỏ khung"
-          title="Thu nhỏ khung dáng"
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            background: 'rgba(255, 255, 255, 0.14)',
-            color: '#fff',
-            fontSize: 16,
-            fontWeight: 'bold',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-        >
-          −
-        </button>
-
-        {/* Quick Fit Screen Button */}
-        <button
-          onClick={handleReset}
-          title="Fit vừa vặn màn hình"
-          style={{
-            width: 28,
-            height: 22,
-            borderRadius: 6,
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            background: 'rgba(255, 255, 255, 0.08)',
-            color: 'rgba(255, 255, 255, 0.75)',
-            fontSize: 9,
-            fontWeight: 700,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            marginTop: 2,
-          }}
-        >
-          Fit
-        </button>
+        {/* Fit button */}
+        {isDirty && (
+          <button
+            onClick={resetManual}
+            title="Auto fit"
+            style={{
+              width: 32, height: 20, borderRadius: 6,
+              border: `1px solid ${COLORS.glassBorder}`,
+              background: 'rgba(56,189,248,0.15)',
+              color: COLORS.primary,
+              fontSize: 9, fontWeight: 800,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >FIT</button>
+        )}
       </div>
     </div>
   );
