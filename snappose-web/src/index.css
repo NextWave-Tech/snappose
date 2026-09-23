@@ -11,8 +11,8 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background-color: #000000;
-  color: #ffffff;
+  background-color: #060E1A;
+  color: #F0F9FF;
   font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -37,38 +37,38 @@ html, body {
   flex-direction: column;
 }
 
-/* --- LIQUID GLASS STYLING FOR IPHONE --- */
+/* --- LIQUID GLASS STYLING — SKY BLUE TINT --- */
 .liquid-glass {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(14, 165, 233, 0.07);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 
-    0 16px 36px rgba(0, 0, 0, 0.4),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.3),
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow:
+    0 16px 36px rgba(0, 0, 0, 0.45),
+    inset 0 1px 1px 0 rgba(186, 230, 253, 0.2),
     inset 0 -1px 1px 0 rgba(0, 0, 0, 0.2);
 }
 
 .liquid-glass-card {
-  background: rgba(18, 18, 24, 0.72);
+  background: rgba(10, 18, 30, 0.80);
   backdrop-filter: blur(32px) saturate(200%);
   -webkit-backdrop-filter: blur(32px) saturate(200%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 
-    0 20px 48px rgba(0, 0, 0, 0.5),
-    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.14);
+  box-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.55),
+    inset 0 1px 1.5px 0 rgba(186, 230, 253, 0.15);
   border-radius: 22px;
 }
 
 .liquid-glass-pill {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(14, 165, 233, 0.12);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.25);
   border-radius: 9999px;
-  box-shadow: 
-    0 8px 24px rgba(0, 0, 0, 0.3),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    inset 0 1px 1px 0 rgba(186, 230, 253, 0.2);
 }
 
 /* iOS Liquid Dock Navigation */
@@ -80,16 +80,16 @@ html, body {
   z-index: 50;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: rgba(18, 18, 26, 0.75);
+  gap: 2px;
+  padding: 6px 8px;
+  background: rgba(8, 18, 32, 0.82);
   backdrop-filter: blur(36px) saturate(210%);
   -webkit-backdrop-filter: blur(36px) saturate(210%);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(56, 189, 248, 0.18);
   border-radius: 36px;
-  box-shadow: 
-    0 20px 50px rgba(0, 0, 0, 0.65),
-    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1.5px 0 rgba(186, 230, 253, 0.15);
   max-width: calc(100vw - 32px);
 }
 
@@ -98,38 +98,114 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 6px 14px;
+  padding: 7px 14px;
   border-radius: 26px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(186, 230, 253, 0.5);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   gap: 3px;
   position: relative;
+  letter-spacing: 0.01em;
 }
 
 .liquid-dock-item.active {
-  background: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-  box-shadow: 
-    0 4px 14px rgba(0, 0, 0, 0.3),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.35);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22), rgba(14, 165, 233, 0.14));
+  color: #38BDF8;
+  box-shadow:
+    0 4px 14px rgba(56, 189, 248, 0.2),
+    inset 0 1px 1px 0 rgba(186, 230, 253, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.25);
 }
 
 .liquid-dock-item:active {
-  transform: scale(0.92);
+  transform: scale(0.90);
 }
 
 .liquid-btn {
-  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
   cursor: pointer;
 }
 
 .liquid-btn:active {
-  transform: scale(0.94);
+  transform: scale(0.93);
+  opacity: 0.85;
+}
+
+/* ---- CAMERA-SPECIFIC COMPONENTS ---- */
+
+/* 3×3 Grid overlay */
+.camera-grid-3x3 {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr 1fr 1fr;
+}
+
+.camera-grid-3x3-cell {
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+}
+
+/* Capture area frame / border */
+.capture-frame {
+  position: absolute;
+  pointer-events: none;
+  z-index: 7;
+  border-radius: 8px;
+  /* corners only */
+  box-shadow: none;
+}
+
+.capture-frame::before,
+.capture-frame::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: #38BDF8;
+  border-style: solid;
+}
+
+.capture-frame::before {
+  top: 0; left: 0;
+  border-width: 2px 0 0 2px;
+  border-radius: 6px 0 0 0;
+}
+
+.capture-frame::after {
+  bottom: 0; right: 0;
+  border-width: 0 2px 2px 0;
+  border-radius: 0 0 6px 0;
+}
+
+/* Lens selector chip */
+.lens-chip {
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 11px;
+  padding: 5px 11px;
+  transition: all 0.15s ease;
+  letter-spacing: 0.02em;
+}
+
+.lens-chip.active {
+  background: #38BDF8;
+  color: #060E1A;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.55);
+}
+
+.lens-chip.inactive {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.80);
 }
 
 /* Animations */
@@ -153,15 +229,25 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseBorder {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(56, 189, 248, 0.3);
   border-radius: 4px;
 }
