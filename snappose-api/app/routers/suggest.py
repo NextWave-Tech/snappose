@@ -3,17 +3,45 @@ import base64
 import io
 from typing import Optional
 
+import numpy as np
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
-from app.clip_engine import cosine_similarity, embed_image
+from app.clip_engine import cosine_similarity, embed_image, embed_text
 from app.database import get_db
 from app.models import Category, Pose
 from app.schemas import EnvironmentScore, MatchImageResponse, PoseOut
 
 router = APIRouter(prefix="/api", tags=["suggest"])
+
+# Zero-shot gender detection — reuses the already-loaded CLIP model's text tower,
+# no extra model needed. Anchors are cached after the first request.
+_GENDER_PROMPTS = {
+    "nam": ["a photo of a man", "a photo of a male person", "a photo of a boy"],
+    "nu": ["a photo of a woman", "a photo of a female person", "a photo of a girl"],
+}
+_gender_anchors: dict[str, np.ndarray] | None = None
+
+
+def _get_gender_anchors() -> dict[str, np.ndarray]:
+    global _gender_anchors
+    if _gender_anchors is None:
+        anchors = {}
+        for label, prompts in _GENDER_PROMPTS.items():
+            vecs = np.array([embed_text(p) for p in prompts], dtype=np.float32)
+            mean = vecs.mean(axis=0)
+            anchors[label] = mean / np.linalg.norm(mean)
+        _gender_anchors = anchors
+    return _gender_anchors
+
+
+def _detect_gender(query_vec: list[float]) -> str:
+    anchors = _get_gender_anchors()
+    q = np.array(query_vec, dtype=np.float32)
+    scores = {label: float(np.dot(q, vec)) for label, vec in anchors.items()}
+    return max(scores, key=scores.get)
 
 
 class SuggestRequest(BaseModel):
@@ -32,6 +60,7 @@ def _decode_image_from_base64(data: str) -> Image.Image:
 
 def _process_image_matching(img: Image.Image, category_id: Optional[int], top_k: int, db: Session):
     query_vec = embed_image(img)
+    detected_gender = _detect_gender(query_vec)
 
     # 1. Fetch active poses that have embeddings
     q = db.query(Pose).options(joinedload(Pose.category)).filter(Pose.is_active.is_(True), Pose.embedding.isnot(None))
@@ -43,6 +72,16 @@ def _process_image_matching(img: Image.Image, category_id: Optional[int], top_k:
 
     if not poses:
         raise HTTPException(status_code=404, detail="Chưa có pose nào có dữ liệu embedding trong hệ thống")
+
+    # Hard-filter by detected gender first — CLIP's image-image similarity alone
+    # doesn't reliably weigh gender, so this is a deterministic pre-filter rather
+    # than leaving it to the similarity ranking below. Poses without a gender
+    # label (not yet auto-labeled) stay eligible so nothing gets excluded by
+    # missing metadata, and if filtering would leave nothing, fall back to the
+    # unfiltered pool instead of a dead end.
+    gendered = [p for p in poses if p.gender == detected_gender or p.gender is None]
+    if gendered:
+        poses = gendered
 
     # 2. Rank poses by cosine similarity descending
     scored = [
@@ -86,7 +125,7 @@ def _process_image_matching(img: Image.Image, category_id: Optional[int], top_k:
     env_list.sort(key=lambda e: e.score, reverse=True)
     detected = env_list[0] if env_list else None
 
-    return results, detected, env_list
+    return results, detected, env_list, detected_gender
 
 
 @router.post("/suggest-pose", response_model=list[PoseOut])
@@ -97,7 +136,7 @@ def suggest_pose(body: SuggestRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid image data")
 
     k = max(1, min(body.top_k, 20))
-    matches, _, _ = _process_image_matching(img, body.category_id, k, db)
+    matches, _, _, _ = _process_image_matching(img, body.category_id, k, db)
     return matches
 
 
@@ -110,10 +149,11 @@ def match_image(body: SuggestRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid image data")
 
     k = max(1, min(body.top_k, 30))
-    matches, detected_env, env_list = _process_image_matching(img, body.category_id, k, db)
+    matches, detected_env, env_list, detected_gender = _process_image_matching(img, body.category_id, k, db)
 
     return MatchImageResponse(
         detected_environment=detected_env,
+        detected_gender=detected_gender,
         environments=env_list,
         matches=matches,
     )
@@ -129,10 +169,11 @@ async def match_image_file(file: UploadFile = File(...), top_k: int = Form(10), 
         raise HTTPException(status_code=400, detail="Định dạng file ảnh không hợp lệ")
 
     k = max(1, min(top_k, 30))
-    matches, detected_env, env_list = _process_image_matching(img, None, k, db)
+    matches, detected_env, env_list, detected_gender = _process_image_matching(img, None, k, db)
 
     return MatchImageResponse(
         detected_environment=detected_env,
+        detected_gender=detected_gender,
         environments=env_list,
         matches=matches,
     )

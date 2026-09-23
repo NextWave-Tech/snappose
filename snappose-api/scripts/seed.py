@@ -6,6 +6,11 @@ Folder convention:
       {prefix}-photo.{jpg|png|webp}   (hoặc dùng _ thay -)
       {prefix}-skeleton.{jpg|png|webp}
 
+  {prefix}-photo/{prefix}-skeleton cũng được phép nằm sâu hơn 1 cấp, vd đã
+  gom theo giới tính bằng scripts/sort_poses_by_gender.py:
+    poses/{category-slug}/nam/{prefix}-photo.ext
+    poses/{category-slug}/nu/{prefix}-photo.ext
+
   Folder name = category slug (vd: bien, ca-phe, cafe...)
   Nếu folder name chưa có trong CATEGORY_NAMES → dùng folder name làm tên hiển thị.
 
@@ -55,7 +60,7 @@ def scan_poses(poses_dir: Path) -> dict[str, list[dict]]:
         slug = cat_dir.name
         pairs: dict[str, dict] = defaultdict(dict)
 
-        for f in cat_dir.iterdir():
+        for f in cat_dir.rglob("*"):
             if not f.is_file():
                 continue
             ext = f.suffix.lower()

@@ -39,6 +39,7 @@ class PoseOut(BaseModel):
     skeleton_url: str
     sort_order: int
     is_active: bool
+    gender: str | None = None
     similarity: float | None = None
 
     class Config:
@@ -55,6 +56,7 @@ class EnvironmentScore(BaseModel):
 
 class MatchImageResponse(BaseModel):
     detected_environment: EnvironmentScore | None = None
+    detected_gender: str | None = None
     environments: list[EnvironmentScore] = []
     matches: list[PoseOut] = []
 
