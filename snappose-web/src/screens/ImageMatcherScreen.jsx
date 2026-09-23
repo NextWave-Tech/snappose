@@ -44,8 +44,8 @@ export default function ImageMatcherScreen({ onApplyPose, onBackToCamera }) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      background: 'radial-gradient(ellipse at top, #1e1b4b 0%, #0a0a0f 70%, #000000 100%)',
-      color: '#fff',
+      background: 'linear-gradient(180deg, #0A1628 0%, #060E1A 100%)',
+      color: COLORS.text,
       overflowY: 'auto',
       padding: 'max(16px, env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom))',
     }}>
@@ -64,9 +64,8 @@ export default function ImageMatcherScreen({ onApplyPose, onBackToCamera }) {
           onClick={onBackToCamera}
           className="liquid-btn"
           style={{
-            background: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255,255,255,0.2)',
+            background: 'rgba(255,255,255,0.07)',
+            border: `1px solid ${COLORS.glassBorder}`,
             color: '#fff',
             borderRadius: 20,
             padding: '8px 16px',
@@ -174,8 +173,8 @@ export default function ImageMatcherScreen({ onApplyPose, onBackToCamera }) {
             <div
               className="liquid-glass-card"
               style={{
-                background: 'linear-gradient(135deg, rgba(30,58,138,0.6), rgba(88,28,135,0.6))',
-                border: '1px solid rgba(147,197,253,0.3)',
+                background: 'linear-gradient(135deg, rgba(14,165,233,0.25), rgba(244,114,182,0.2))',
+                border: `1px solid ${COLORS.glassBorder}`,
                 padding: '16px 20px',
                 display: 'flex',
                 alignItems: 'center',
@@ -196,7 +195,7 @@ export default function ImageMatcherScreen({ onApplyPose, onBackToCamera }) {
                   padding: '6px 14px',
                   fontSize: 14,
                   fontWeight: 700,
-                  color: '#93c5fd',
+                  color: COLORS.primary,
                 }}
               >
                 {result.detected_environment.confidence_percent}% khớp
@@ -228,7 +227,7 @@ export default function ImageMatcherScreen({ onApplyPose, onBackToCamera }) {
                         width: `${env.confidence_percent}%`,
                         height: '100%',
                         background: env.id === result.detected_environment?.id
-                          ? 'linear-gradient(90deg, #3b82f6, #a855f7)'
+                          ? `linear-gradient(90deg, ${COLORS.primary}, ${COLORS.accent})`
                           : 'rgba(255,255,255,0.3)',
                         borderRadius: 4,
                         transition: 'width 0.5s ease',
@@ -295,7 +294,7 @@ export default function ImageMatcherScreen({ onApplyPose, onBackToCamera }) {
                         borderRadius: 12,
                         fontSize: 11,
                         fontWeight: 700,
-                        color: '#60a5fa',
+                        color: COLORS.primary,
                       }}>
                         {Math.round(pose.similarity * 100)}% khớp
                       </div>

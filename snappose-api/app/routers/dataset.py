@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from PIL import Image
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app import storage
 from app.clip_engine import embed_image
@@ -105,10 +105,16 @@ def get_dataset_summary(db: Session = Depends(get_db)):
     total_poses = 0
     total_embedded = 0
 
+    # One query for every pose instead of one query per category (avoids N+1).
+    all_poses = db.query(Pose.category_id, Pose.embedding).all()
+    poses_by_cat: dict[int, list] = {}
+    for cat_id, embedding in all_poses:
+        poses_by_cat.setdefault(cat_id, []).append(embedding)
+
     for cat in categories:
-        poses = db.query(Pose).filter(Pose.category_id == cat.id).all()
-        p_count = len(poses)
-        emb_count = sum(1 for p in poses if p.embedding is not None and len(p.embedding) > 0)
+        embeddings = poses_by_cat.get(cat.id, [])
+        p_count = len(embeddings)
+        emb_count = sum(1 for e in embeddings if e is not None and len(e) > 0)
         total_poses += p_count
         total_embedded += emb_count
 
@@ -140,7 +146,7 @@ def list_dataset_items(
     db: Session = Depends(get_db),
 ):
     """List dataset poses with filter and vector status."""
-    query = db.query(Pose)
+    query = db.query(Pose).options(joinedload(Pose.category))
 
     if category_id is not None:
         query = query.filter(Pose.category_id == category_id)

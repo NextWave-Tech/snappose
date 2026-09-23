@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from PIL import Image
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.clip_engine import cosine_similarity, embed_image
 from app.database import get_db
@@ -34,7 +34,7 @@ def _process_image_matching(img: Image.Image, category_id: Optional[int], top_k:
     query_vec = embed_image(img)
 
     # 1. Fetch active poses that have embeddings
-    q = db.query(Pose).filter(Pose.is_active.is_(True), Pose.embedding.isnot(None))
+    q = db.query(Pose).options(joinedload(Pose.category)).filter(Pose.is_active.is_(True), Pose.embedding.isnot(None))
     if category_id is not None:
         cat_poses = q.filter(Pose.category_id == category_id).all()
         poses = cat_poses if cat_poses else q.all()

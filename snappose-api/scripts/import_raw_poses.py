@@ -33,8 +33,9 @@ def find_raw_pairs(cat_dir: Path) -> list[tuple[Path, Path]]:
         if ALREADY_OK_RE.match(stem):
             continue  # đã đúng chuẩn rồi, bỏ qua
         khung_candidates = [
-            cat_dir / f"{stem}-khung{f.suffix}",
-            cat_dir / f"{stem}_khung{f.suffix}",
+            cat_dir / f"{stem}{sep}khung{ext}"
+            for sep in ("-", "_")
+            for ext in RAW_EXTS
         ]
         khung = next((k for k in khung_candidates if k.exists()), None)
         if khung is None:
@@ -67,7 +68,9 @@ def convert_skeleton_to_transparent(path: Path) -> Path:
         png_path = path.with_suffix(".png")
         png_path.write_bytes(remove_other_bg(path.read_bytes()))
         print(f"  [AI rembg] {path.name} -> {png_path.name}")
-    path.unlink()  # xoá file .jpg gốc (nền đen), chỉ giữ .png trong suốt
+    if path != png_path:
+        path.unlink()  # xoá file gốc (nền đen) NẾU khác path.png — tránh tự xoá luôn
+        # file .png vừa lưu khi input đã sẵn là .png (path == png_path)
     return png_path
 
 

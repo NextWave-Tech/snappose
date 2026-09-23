@@ -19,11 +19,12 @@ from PIL import Image
 def is_dark_bg(arr: np.ndarray, sample_size: int = 200) -> bool:
     """Lấy mẫu góc ảnh — nếu trung bình sáng < 30 là nền tối."""
     h, w = arr.shape[:2]
+    s = max(1, min(sample_size, h // 2, w // 2))
     corners = np.concatenate([
-        arr[:sample_size, :sample_size],
-        arr[:sample_size, w - sample_size:],
-        arr[h - sample_size:, :sample_size],
-        arr[h - sample_size:, w - sample_size:],
+        arr[:s, :s],
+        arr[:s, w - s:],
+        arr[h - s:, :s],
+        arr[h - s:, w - s:],
     ])
     return corners[:, :, :3].mean() < 30
 

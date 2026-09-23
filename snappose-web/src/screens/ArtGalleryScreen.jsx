@@ -32,6 +32,12 @@ export function getUserGalleryPhotos() {
   }
 }
 
+const BackIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M15 18l-6-6 6-6" />
+  </svg>
+);
+
 export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
   const [activeTab, setActiveTab] = useState('user'); // 'user' | 'poses'
   const [userPhotos, setUserPhotos] = useState([]);
@@ -128,61 +134,52 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      background: 'radial-gradient(ellipse at top, #14142b 0%, #08080c 60%, #000000 100%)',
-      color: '#fff',
+      background: 'linear-gradient(180deg, #0A1628 0%, #060E1A 100%)',
+      color: COLORS.text,
       position: 'relative',
       overflow: 'hidden',
     }}>
-      {/* Top Glass Header */}
+      {/* Top Header */}
       <div style={{
         padding: 'max(14px, env(safe-area-inset-top)) 16px 10px',
-        background: 'rgba(12, 12, 18, 0.82)',
-        backdropFilter: 'blur(30px) saturate(200%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(200%)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+        background: 'rgba(6,14,26,0.9)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderBottom: `1px solid ${COLORS.glassBorder}`,
         display: 'flex',
         flexDirection: 'column',
         gap: 10,
         zIndex: 20,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>
-              Exhibition Single View
-            </span>
-            <h1 style={{ fontSize: 20, fontWeight: 800, margin: '2px 0 0', letterSpacing: -0.5 }}>
-              🖼️ Art Gallery
-            </h1>
-          </div>
+          <h1 style={{ fontSize: 18, fontWeight: 800, margin: 0, letterSpacing: -0.3 }}>
+            Thư viện
+          </h1>
 
           <button
             onClick={onBackToCamera}
             className="liquid-btn"
+            aria-label="Về camera"
             style={{
-              background: 'rgba(255,255,255,0.12)',
-              backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255,255,255,0.2)',
+              width: 32, height: 32, borderRadius: 16,
+              background: 'rgba(255,255,255,0.07)',
+              border: '1px solid rgba(255,255,255,0.12)',
               color: '#fff',
-              borderRadius: 20,
-              padding: '7px 15px',
-              fontSize: 12,
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              cursor: 'pointer',
             }}
           >
-            📸 Chụp tiếp
+            <BackIcon />
           </button>
         </div>
 
-        {/* Tab Switcher: Ảnh của bạn vs Tuyệt tác Pose */}
+        {/* Tab Switcher: Ảnh của bạn vs Pose mẫu */}
         <div style={{
           display: 'flex',
-          background: 'rgba(0, 0, 0, 0.45)',
+          background: 'rgba(255,255,255,0.05)',
           padding: 3,
-          borderRadius: 14,
-          border: '1px solid rgba(255, 255, 255, 0.08)',
+          borderRadius: 12,
+          border: `1px solid ${COLORS.glassBorder}`,
         }}>
           <button
             onClick={() => setActiveTab('user')}
@@ -190,16 +187,15 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             style={{
               flex: 1,
               padding: '8px 0',
-              borderRadius: 11,
+              borderRadius: 9,
               border: 'none',
-              background: activeTab === 'user' ? 'rgba(255, 255, 255, 0.18)' : 'transparent',
-              color: activeTab === 'user' ? '#fff' : 'rgba(255, 255, 255, 0.55)',
+              background: activeTab === 'user' ? `linear-gradient(135deg, ${COLORS.primaryDark}, ${COLORS.primaryDeep})` : 'transparent',
+              color: activeTab === 'user' ? '#fff' : 'rgba(186,230,253,0.55)',
               fontWeight: 700,
               fontSize: 12,
-              boxShadow: activeTab === 'user' ? '0 4px 14px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.25)' : 'none',
             }}
           >
-            📸 Ảnh đã chụp ({userPhotos.length})
+            Ảnh đã chụp ({userPhotos.length})
           </button>
 
           <button
@@ -208,16 +204,15 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             style={{
               flex: 1,
               padding: '8px 0',
-              borderRadius: 11,
+              borderRadius: 9,
               border: 'none',
-              background: activeTab === 'poses' ? 'rgba(255, 255, 255, 0.18)' : 'transparent',
-              color: activeTab === 'poses' ? '#fff' : 'rgba(255, 255, 255, 0.55)',
+              background: activeTab === 'poses' ? `linear-gradient(135deg, ${COLORS.accentDark}, ${COLORS.accent})` : 'transparent',
+              color: activeTab === 'poses' ? '#000' : 'rgba(186,230,253,0.55)',
               fontWeight: 700,
               fontSize: 12,
-              boxShadow: activeTab === 'poses' ? '0 4px 14px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.25)' : 'none',
             }}
           >
-            ✨ Tuyệt tác Pose ({dbPoses.length})
+            Pose mẫu ({dbPoses.length})
           </button>
         </div>
 
@@ -236,12 +231,12 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
               style={{
                 flexShrink: 0,
                 padding: '4px 12px',
-                borderRadius: 16,
-                border: '1px solid ' + (selectedCategory === 'all' ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'),
-                background: selectedCategory === 'all' ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.05)',
-                color: '#fff',
+                borderRadius: 14,
+                border: `1px solid ${selectedCategory === 'all' ? COLORS.primary : 'rgba(255,255,255,0.12)'}`,
+                background: selectedCategory === 'all' ? 'rgba(56,189,248,0.16)' : 'rgba(255,255,255,0.04)',
+                color: selectedCategory === 'all' ? COLORS.primary : 'rgba(255,255,255,0.7)',
                 fontSize: 11,
-                fontWeight: 600,
+                fontWeight: 700,
               }}
             >
               Tất cả
@@ -254,12 +249,12 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
                 style={{
                   flexShrink: 0,
                   padding: '4px 12px',
-                  borderRadius: 16,
-                  border: '1px solid ' + (String(selectedCategory) === String(c.id) ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'),
-                  background: String(selectedCategory) === String(c.id) ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.05)',
-                  color: '#fff',
+                  borderRadius: 14,
+                  border: `1px solid ${String(selectedCategory) === String(c.id) ? COLORS.primary : 'rgba(255,255,255,0.12)'}`,
+                  background: String(selectedCategory) === String(c.id) ? 'rgba(56,189,248,0.16)' : 'rgba(255,255,255,0.04)',
+                  color: String(selectedCategory) === String(c.id) ? COLORS.primary : 'rgba(255,255,255,0.7)',
                   fontSize: 11,
-                  fontWeight: 600,
+                  fontWeight: 700,
                 }}
               >
                 {c.name}
@@ -290,11 +285,10 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             height: '100%',
             maxHeight: 'calc(100% - 10px)',
             position: 'relative',
-            borderRadius: 24,
+            borderRadius: 20,
             overflow: 'hidden',
-            background: '#000000',
-            boxShadow: '0 24px 60px rgba(0,0,0,0.85), inset 0 1px 2px rgba(255,255,255,0.25)',
-            border: '1px solid rgba(255,255,255,0.12)',
+            background: '#000',
+            border: `1px solid ${COLORS.glassBorder}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -303,7 +297,7 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             <img
               key={currentItem.id || currentItem.photo_url}
               src={activeTab === 'user' ? currentItem.url : resolveImageUrl(currentItem.photo_url)}
-              alt="Art Exhibition"
+              alt="Ảnh"
               style={{
                 width: '100%',
                 height: '100%',
@@ -316,7 +310,7 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             {activeTab === 'poses' && currentItem.skeleton_url && showOutline && (
               <img
                 src={resolveImageUrl(currentItem.skeleton_url)}
-                alt="Skeleton"
+                alt="Khung pose"
                 style={{
                   position: 'absolute',
                   inset: 0,
@@ -324,7 +318,7 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
                   height: '100%',
                   objectFit: 'contain',
                   opacity: 0.9,
-                  filter: 'drop-shadow(0 0 2px white)',
+                  filter: `drop-shadow(0 0 3px ${COLORS.primary})`,
                   pointerEvents: 'none',
                 }}
               />
@@ -333,42 +327,36 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             {/* Top Showcase Overlay: Badge Môi trường & Counter */}
             <div style={{
               position: 'absolute',
-              top: 14,
-              left: 14,
-              right: 14,
+              top: 12,
+              left: 12,
+              right: 12,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               pointerEvents: 'none',
             }}>
-              <div
-                className="liquid-glass-pill"
-                style={{
-                  pointerEvents: 'auto',
-                  padding: '6px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: 'rgba(15, 15, 25, 0.75)',
-                }}
-              >
-                <span style={{ fontSize: 13 }}>📍</span>
-                <span style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>
-                  {currentItem.environment || currentItem.category_name || 'Nghệ thuật'}
-                </span>
+              <div style={{
+                pointerEvents: 'auto',
+                padding: '5px 12px',
+                borderRadius: 12,
+                background: 'rgba(6,14,26,0.7)',
+                backdropFilter: 'blur(10px)',
+                border: `1px solid ${COLORS.glassBorder}`,
+                fontSize: 11, fontWeight: 700, color: COLORS.primary,
+              }}>
+                {currentItem.environment || currentItem.category_name || 'Ảnh'}
               </div>
 
-              <div
-                className="liquid-glass-pill"
-                style={{
-                  pointerEvents: 'auto',
-                  padding: '6px 12px',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: 'rgba(255,255,255,0.8)',
-                  background: 'rgba(0,0,0,0.6)',
-                }}
-              >
+              <div style={{
+                pointerEvents: 'auto',
+                padding: '5px 10px',
+                borderRadius: 12,
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'rgba(255,255,255,0.8)',
+                background: 'rgba(6,14,26,0.7)',
+                backdropFilter: 'blur(10px)',
+              }}>
                 {currentIndex + 1} / {currentList.length}
               </div>
             </div>
@@ -380,15 +368,14 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
               className="liquid-btn"
               style={{
                 position: 'absolute',
-                left: 10,
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                left: 8,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                background: 'rgba(6,14,26,0.6)',
+                border: `1px solid ${COLORS.glassBorder}`,
                 color: '#fff',
-                fontSize: 18,
+                fontSize: 16,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -404,15 +391,14 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
               className="liquid-btn"
               style={{
                 position: 'absolute',
-                right: 10,
-                width: 36,
-                height: 36,
-                borderRadius: 18,
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(8px)',
-                border: '1px solid rgba(255,255,255,0.15)',
+                right: 8,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                background: 'rgba(6,14,26,0.6)',
+                border: `1px solid ${COLORS.glassBorder}`,
                 color: '#fff',
-                fontSize: 18,
+                fontSize: 16,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -425,48 +411,48 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             {/* Bottom Actions Floating Bar inside photo */}
             <div style={{
               position: 'absolute',
-              bottom: 12,
-              left: 12,
-              right: 12,
-              background: 'rgba(15, 15, 24, 0.78)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 18,
-              padding: '8px 14px',
+              bottom: 10,
+              left: 10,
+              right: 10,
+              background: 'rgba(6,14,26,0.75)',
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+              border: `1px solid ${COLORS.glassBorder}`,
+              borderRadius: 16,
+              padding: '8px 12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 8,
             }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {currentItem.name || `Ảnh #${currentIndex + 1}`}
                 </div>
                 {currentItem.timestamp && (
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>
                     {new Date(currentItem.timestamp).toLocaleString('vi-VN')}
                   </div>
                 )}
               </div>
 
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                 {/* Toggle outline for poses */}
                 {activeTab === 'poses' && currentItem.skeleton_url && (
                   <button
                     onClick={() => setShowOutline(!showOutline)}
                     className="liquid-btn"
                     style={{
-                      background: showOutline ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.1)',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      borderRadius: 14,
+                      background: showOutline ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.08)',
+                      border: `1px solid ${showOutline ? COLORS.glassBorder : 'rgba(255,255,255,0.14)'}`,
+                      borderRadius: 12,
                       padding: '6px 10px',
-                      color: '#fff',
+                      color: showOutline ? COLORS.primary : '#fff',
                       fontSize: 11,
-                      fontWeight: 600,
+                      fontWeight: 700,
                     }}
                   >
-                    {showOutline ? '🦴 Ẩn viền' : '🦴 Viền'}
+                    {showOutline ? 'Ẩn khung' : 'Khung'}
                   </button>
                 )}
 
@@ -477,20 +463,17 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
                   className="liquid-btn"
                   title="Tải ảnh về máy"
                   style={{
-                    background: 'rgba(255,255,255,0.12)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    borderRadius: 14,
+                    background: 'rgba(255,255,255,0.08)',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    borderRadius: 12,
                     padding: '6px 12px',
                     color: '#fff',
                     textDecoration: 'none',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
+                    fontSize: 11,
+                    fontWeight: 700,
                   }}
                 >
-                  📥 Lưu
+                  Lưu
                 </a>
 
                 {/* Apply pose to camera */}
@@ -501,15 +484,15 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
                     style={{
                       background: COLORS.accent,
                       border: 'none',
-                      borderRadius: 14,
+                      borderRadius: 12,
                       padding: '6px 14px',
                       color: '#000',
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 800,
                       cursor: 'pointer',
                     }}
                   >
-                    📸 Tạo dáng này
+                    Dùng pose
                   </button>
                 )}
 
@@ -520,17 +503,17 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
                     className="liquid-btn"
                     title="Xóa ảnh này"
                     style={{
-                      background: 'rgba(220,38,38,0.3)',
-                      border: '1px solid rgba(220,38,38,0.5)',
-                      borderRadius: 14,
+                      background: 'rgba(220,38,38,0.22)',
+                      border: '1px solid rgba(220,38,38,0.4)',
+                      borderRadius: 12,
                       padding: '6px 10px',
-                      color: '#ff8888',
+                      color: '#fca5a5',
                       fontSize: 12,
                       fontWeight: 700,
                       cursor: 'pointer',
                     }}
                   >
-                    🗑️
+                    Xóa
                   </button>
                 )}
               </div>
@@ -545,44 +528,36 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
             textAlign: 'center',
             padding: 24,
           }}>
-            <div style={{ fontSize: 50, marginBottom: 12 }}>🖼️</div>
-            <h3 style={{ fontSize: 17, fontWeight: 700, margin: '0 0 8px' }}>Chưa có tác phẩm</h3>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: 0 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 6px', color: 'rgba(255,255,255,0.85)' }}>
+              Chưa có ảnh
+            </h3>
+            <p style={{ fontSize: 13, color: 'rgba(186,230,253,0.5)', margin: 0 }}>
               {activeTab === 'user' ? 'Chụp ảnh ở camera để tự động lưu vào đây.' : 'Không có pose nào trong danh mục này.'}
             </p>
           </div>
         )}
       </div>
 
-      {/* Bottom Thumbnail Slider Filmstrip (Thanh trượt chuyển ảnh ở dưới) */}
+      {/* Bottom Thumbnail Slider Filmstrip */}
       <div style={{
         padding: '8px 12px calc(76px + env(safe-area-inset-bottom))',
-        background: 'rgba(10, 10, 16, 0.85)',
-        backdropFilter: 'blur(28px)',
-        WebkitBackdropFilter: 'blur(28px)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'rgba(6,10,20,0.9)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        borderTop: `1px solid ${COLORS.glassBorder}`,
         zIndex: 20,
       }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 6,
-          paddingInline: 4,
-        }}>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 600 }}>
-            {currentList.length > 0 ? `Cuộn hoặc chạm để chọn ảnh (${currentList.length})` : ''}
-          </span>
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
-            👈 Vuốt ảnh để chuyển 👉
-          </span>
-        </div>
+        {currentList.length > 0 && (
+          <div style={{ fontSize: 11, color: 'rgba(186,230,253,0.5)', fontWeight: 600, marginBottom: 6, paddingInline: 4 }}>
+            {currentList.length} ảnh — vuốt hoặc chạm để chọn
+          </div>
+        )}
 
         <div
           ref={sliderRef}
           style={{
             display: 'flex',
-            gap: 10,
+            gap: 8,
             overflowX: 'auto',
             padding: '4px 2px 6px',
             scrollbarWidth: 'none',
@@ -599,20 +574,15 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
                 onClick={() => setCurrentIndex(idx)}
                 className="liquid-btn"
                 style={{
-                  width: 62,
-                  height: 62,
+                  width: 58,
+                  height: 58,
                   flexShrink: 0,
-                  borderRadius: 14,
+                  borderRadius: 12,
                   overflow: 'hidden',
-                  position: 'relative',
                   cursor: 'pointer',
-                  border: isSelected
-                    ? '2.5px solid #ffffff'
-                    : '1px solid rgba(255, 255, 255, 0.15)',
-                  boxShadow: isSelected
-                    ? '0 0 16px rgba(255, 255, 255, 0.5), 0 4px 12px rgba(0,0,0,0.5)'
-                    : 'none',
-                  transform: isSelected ? 'scale(1.08)' : 'scale(1)',
+                  outline: isSelected ? `2px solid ${COLORS.primary}` : '1px solid rgba(255,255,255,0.12)',
+                  outlineOffset: -1,
+                  boxShadow: isSelected ? `0 0 0 3px ${COLORS.primaryGlow}` : 'none',
                   opacity: isSelected ? 1 : 0.6,
                   transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
                   scrollSnapAlign: 'center',
@@ -621,18 +591,9 @@ export default function ArtGalleryScreen({ onApplyPose, onBackToCamera }) {
               >
                 <img
                   src={thumbUrl}
-                  alt="Thumb"
+                  alt=""
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
-                {isSelected && (
-                  <div style={{
-                    position: 'absolute',
-                    inset: 0,
-                    border: '1.5px solid ' + COLORS.accent,
-                    borderRadius: 12,
-                    pointerEvents: 'none',
-                  }} />
-                )}
               </div>
             );
           })}

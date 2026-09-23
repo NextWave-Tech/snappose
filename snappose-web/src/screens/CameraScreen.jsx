@@ -8,15 +8,15 @@ import PoseOverlay from '../components/PoseOverlay';
 
 /* ─── Tiny SVG Icons ──────────────────────────────────────────────────────── */
 const FlipIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 2l4 4-4 4" /><path d="M3 11v-1a4 4 0 0 1 4-4h14" />
     <path d="M7 22l-4-4 4-4" /><path d="M21 13v1a4 4 0 0 1-4 4H3" />
   </svg>
 );
 const GridIcon = ({ on }) => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-    stroke={on ? COLORS.primary : 'rgba(255,255,255,0.6)'} strokeWidth="2" strokeLinecap="round">
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+    stroke={on ? COLORS.primary : 'rgba(255,255,255,0.65)'} strokeWidth="2" strokeLinecap="round">
     <rect x="3" y="3" width="18" height="18" rx="1.5" />
     <line x1="9" y1="3" x2="9" y2="21" /><line x1="15" y1="3" x2="15" y2="21" />
     <line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" />
@@ -27,13 +27,23 @@ const StarIcon = () => (
     <path d="M12 2L15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2z" />
   </svg>
 );
-const ChevronIcon = ({ up }) => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-    style={{ transform: up ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
-    <path d="M6 9l6 6 6-6" />
-  </svg>
-);
+
+/* Small icon button used in the top bar */
+function TopIconButton({ onClick, active, children, ariaLabel }) {
+  return (
+    <button onClick={onClick} className="liquid-btn" aria-label={ariaLabel}
+      style={{
+        width: 32, height: 32, borderRadius: 16,
+        background: active ? 'rgba(56,189,248,0.16)' : 'rgba(255,255,255,0.07)',
+        border: `1px solid ${active ? COLORS.glassBorder : 'rgba(255,255,255,0.12)'}`,
+        color: active ? COLORS.primary : 'rgba(255,255,255,0.8)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        cursor: 'pointer', flexShrink: 0,
+      }}>
+      {children}
+    </button>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CAMERA SCREEN
@@ -61,16 +71,16 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
   /* UI toggles */
   const [showGrid, setShowGrid]         = useState(false);
   const [arIndex, setArIndex]           = useState(0);
-  const [poseDrawerOpen, setPoseDrawerOpen] = useState(true);
-  const [mode, setMode]                 = useState('POSE'); // TỰ DO | POSE | VIDEO
 
   /* Dynamic safe height for camera frame */
-  const [bottomOffset, setBottomOffset] = useState(250);
+  const [bottomOffset, setBottomOffset] = useState(120);
 
   const currentAr   = ASPECT_RATIOS[arIndex];
   const currentPose = poses.find((p) => p.id === selectedPoseId) || poses[0];
 
-  const availableZooms = facingMode === 'user' ? [0.5, 1, 2] : [0.5, 1, 2, 3];
+  // 0.5x excluded — most phones don't expose a separate ultra-wide device to the browser,
+  // so it can't actually zoom out and just distorts the preview instead.
+  const availableZooms = facingMode === 'user' ? [1, 2] : [1, 2, 3];
 
   // Measure bottom panel height so viewfinder frame NEVER touches buttons
   useEffect(() => {
@@ -84,7 +94,7 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
     const ro = new ResizeObserver(() => update());
     ro.observe(el);
     return () => ro.disconnect();
-  }, [poses.length, poseDrawerOpen]);
+  }, []);
 
   /* ── Lens detection ──────────────────────────────────────────────────── */
   const handleLensesReady = useCallback((detected) => {
@@ -133,7 +143,6 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
         setPoses(top5);
         setSelectedPoseId(top5[0].id);
         setDetectedEnv(top5[0].category_name || 'Đã phát hiện');
-        setPoseDrawerOpen(true);
       }
     } catch (err) {
       setLoadError('Gợi ý thất bại: ' + (err.message || err));
@@ -157,11 +166,11 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
         showGrid={showGrid}
         aspectRatio={currentAr.id}
         activeLensId={activeLensId}
-        topOffset={58}
+        topOffset={54}
         bottomOffset={bottomOffset}
         onLensesReady={handleLensesReady}
         onZoomChange={setCurrentZoom}
-        overlay={mode === 'POSE' ? <PoseOverlay skeletonUrl={currentPose?.skeleton_url} /> : null}
+        overlay={<PoseOverlay skeletonUrl={currentPose?.skeleton_url} />}
       />
 
       {/* ── Shutter Flash ───────────────────────────────────────────── */}
@@ -171,7 +180,7 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
       )}
 
       {/* ══════════════════════════════════════════════════════════════
-          TOP BAR  (like DSLR status strip)
+          TOP BAR — minimal: env hint (left) · grid / frame / flip (right)
       ══════════════════════════════════════════════════════════════ */}
       <div style={{
         position: 'absolute',
@@ -186,16 +195,8 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
         justifyContent: 'space-between',
         gap: 8,
       }}>
-        {/* Left: mode badge + env */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          <div style={{
-            background: `linear-gradient(135deg, ${COLORS.primaryDark}, ${COLORS.primaryDeep})`,
-            color: '#fff', fontSize: 9, fontWeight: 900,
-            padding: '3px 8px', borderRadius: 5, letterSpacing: '0.1em',
-            boxShadow: `0 0 10px ${COLORS.primaryGlow}`,
-          }}>
-            SNAP
-          </div>
+        {/* Left: env status */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
           {detectedEnv ? (
             <div style={{
               background: 'rgba(56,189,248,0.12)',
@@ -203,35 +204,26 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
               borderRadius: 6, padding: '3px 9px',
               fontSize: 10, fontWeight: 700, color: COLORS.primary,
               animation: 'fadeIn 0.2s ease',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               ✨ {detectedEnv}
             </div>
           ) : (
-            <span style={{ fontSize: 10, color: 'rgba(186,230,253,0.5)', fontWeight: 500 }}>
-              {mode === 'POSE' ? 'Bấm ★ để AI gợi ý' : 'Chế độ tự do'}
+            <span style={{ fontSize: 10, color: 'rgba(186,230,253,0.5)', fontWeight: 500,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Bấm ★ để AI gợi ý
             </span>
           )}
         </div>
 
-        {/* Right: current pose name + flip */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {currentPose && mode === 'POSE' && (
-            <span style={{ fontSize: 10, color: 'rgba(186,230,253,0.65)', fontWeight: 600, maxWidth: 90,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {currentPose.name || '—'}
-            </span>
-          )}
-          <button onClick={handleFlip} className="liquid-btn" aria-label="Flip"
-            style={{
-              width: 34, height: 34, borderRadius: 17,
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.14)',
-              color: 'rgba(255,255,255,0.8)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-            }}>
-            <FlipIcon />
-          </button>
+        {/* Right: grid / frame-ratio — small icon cluster */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <TopIconButton onClick={() => setShowGrid((g) => !g)} active={showGrid} ariaLabel="Bật/tắt lưới">
+            <GridIcon on={showGrid} />
+          </TopIconButton>
+          <TopIconButton onClick={cycleAr} active={currentAr.id !== 'full'} ariaLabel="Đổi tỉ lệ khung hình">
+            <span style={{ fontSize: 9, fontWeight: 800 }}>{currentAr.label}</span>
+          </TopIconButton>
         </div>
       </div>
 
@@ -251,8 +243,9 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
         </div>
       )}
 
+
       {/* ══════════════════════════════════════════════════════════════
-          BOTTOM FUNCTIONAL PANEL — measured to keep viewfinder clear
+          BOTTOM PANEL — just 2 thin rows: mode tabs + main controls
       ══════════════════════════════════════════════════════════════ */}
       <div
         ref={bottomPanelRef}
@@ -260,175 +253,36 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
           position: 'absolute',
           left: 0, right: 0, bottom: 0,
           zIndex: 35,
-          background: 'linear-gradient(to top, rgba(6,14,26,0.98) 0%, rgba(6,14,26,0.88) 75%, transparent 100%)',
-          paddingBottom: 'calc(68px + env(safe-area-inset-bottom))',
-          display: 'flex', flexDirection: 'column', gap: 0,
+          background: 'linear-gradient(to top, rgba(6,14,26,0.98) 0%, rgba(6,14,26,0.85) 70%, transparent 100%)',
+          paddingBottom: 'calc(16px + env(safe-area-inset-bottom))',
+          paddingTop: 10,
         }}
       >
-        {/* ── 1. POSE DRAWER (collapsible) ─────────────────────────── */}
+        {/* ── Pose suggestions strip (drawer above main controls) ──────── */}
         {poses.length > 0 && (
           <div style={{
-            marginInline: 12,
-            marginBottom: 6,
-            background: 'rgba(6,14,26,0.85)',
-            backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
-            border: `1px solid ${COLORS.glassBorder}`,
-            borderRadius: 18,
-            overflow: 'hidden',
-            boxShadow: `0 -4px 20px rgba(56,189,248,0.08), 0 8px 30px rgba(0,0,0,0.5)`,
-            animation: 'fadeInUp 0.25s ease',
+            padding: '0 14px 10px',
+            animation: 'fadeIn 0.25s ease',
           }}>
-            {/* Drawer header — tap to toggle */}
-            <button
-              onClick={() => setPoseDrawerOpen((o) => !o)}
-              style={{
-                width: '100%', background: 'transparent', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '9px 12px 8px',
-                color: '#fff',
-              }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{
-                  width: 6, height: 6, borderRadius: 3,
-                  background: COLORS.accent,
-                  boxShadow: `0 0 6px ${COLORS.accentGlow}`,
-                }} />
-                <span style={{
-                  fontSize: 10, fontWeight: 800, letterSpacing: '0.08em',
-                  color: COLORS.primary, textTransform: 'uppercase',
-                }}>
-                  {poses.length} gợi ý phù hợp nhất
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4,
-                color: 'rgba(186,230,253,0.6)', fontSize: 10, fontWeight: 600 }}>
-                {poseDrawerOpen ? 'Thu gọn' : 'Mở ra'}
-                <ChevronIcon up={poseDrawerOpen} />
-              </div>
-            </button>
-
-            {/* Carousel — collapsible */}
-            <div style={{
-              maxHeight: poseDrawerOpen ? 110 : 0,
-              overflow: 'hidden',
-              transition: 'max-height 0.28s cubic-bezier(0.4,0,0.2,1)',
-            }}>
-              <div style={{ padding: '0 10px 10px' }}>
-                <PoseCarousel
-                  poses={poses}
-                  selectedId={selectedPoseId}
-                  onSelect={setSelectedPoseId}
-                />
-              </div>
-            </div>
+            <PoseCarousel
+              poses={poses}
+              selectedId={selectedPoseId}
+              onSelect={setSelectedPoseId}
+            />
           </div>
         )}
 
-        {/* ── 2. LENS SELECTOR (natural position, never overlaps buttons) ── */}
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          paddingTop: 3,
-          paddingBottom: 4,
-        }}>
-          <div style={{
-            display: 'flex',
-            gap: 4,
-            alignItems: 'center',
-            background: 'rgba(6, 14, 26, 0.85)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: `1px solid ${COLORS.glassBorder}`,
-            borderRadius: 999,
-            padding: '3px 6px',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.45)',
-          }}>
-            {availableZooms.map((lvl) => {
-              const isActive = currentZoom === lvl;
-              return (
-                <button
-                  key={lvl}
-                  onClick={() => handleSelectZoom(lvl)}
-                  style={{
-                    border: 'none',
-                    borderRadius: 999,
-                    cursor: 'pointer',
-                    padding: '4px 10px',
-                    background: isActive ? COLORS.primary : 'transparent',
-                    color: isActive ? '#060E1A' : 'rgba(186, 230, 253, 0.85)',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    fontFamily: 'inherit',
-                    letterSpacing: '0.02em',
-                    transition: 'all 0.15s ease',
-                    boxShadow: isActive ? `0 0 12px ${COLORS.primaryGlow}` : 'none',
-                  }}
-                >
-                  {lvl}x
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── 3. PARAMETER STRIP (like DSLR) ────────────────────────── */}
-        <div style={{
-          display: 'flex', alignItems: 'center',
-          paddingInline: 16,
-          paddingBottom: 4,
-          paddingTop: 2,
-          gap: 0,
-          overflowX: 'auto', scrollbarWidth: 'none',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-        }}>
-          {/* Frame ratio */}
-          <ParamChip
-            label="FRAME"
-            value={currentAr.label}
-            active={currentAr.id !== 'full'}
-            onClick={cycleAr}
-          />
-          <ParamDivider />
-          {/* Grid */}
-          <ParamChip
-            label="GRID"
-            value={showGrid ? 'ON' : 'OFF'}
-            active={showGrid}
-            onClick={() => setShowGrid((g) => !g)}
-            icon={<GridIcon on={showGrid} />}
-          />
-          <ParamDivider />
-          {/* Lens active */}
-          <ParamChip
-            label="LENS"
-            value={`${currentZoom}x`}
-            active={currentZoom !== 1}
-            onClick={cycleZoom}
-          />
-          <ParamDivider />
-          {/* Mode */}
-          <ParamChip
-            label="MODE"
-            value={mode}
-            active={true}
-          />
-        </div>
-
-        {/* ── 4. MAIN CONTROLS ROW ───────────────────────────────────── */}
+        {/* ── Main controls row ──────────────────────────────────────── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           paddingInline: 22,
-          paddingTop: 12,
-          paddingBottom: 4,
         }}>
-
           {/* Left: Last photo thumbnail */}
-          <div style={{ width: 52, display: 'flex', justifyContent: 'flex-start' }}>
+          <div style={{ width: 48, display: 'flex', justifyContent: 'flex-start' }}>
             {lastPhotoUrl ? (
               <button onClick={onViewLastPhoto} className="liquid-btn" aria-label="Xem ảnh"
                 style={{
-                  width: 48, height: 48, borderRadius: 12, padding: 0,
+                  width: 44, height: 44, borderRadius: 11, padding: 0,
                   border: `2px solid rgba(56,189,248,0.4)`,
                   overflow: 'hidden', cursor: 'pointer',
                   boxShadow: '0 4px 14px rgba(0,0,0,0.5)',
@@ -436,14 +290,27 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
                 <img src={lastPhotoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               </button>
             ) : (
-              <div style={{ width: 48, height: 48 }} />
+              <div style={{ width: 44, height: 44 }} />
             )}
           </div>
 
-          {/* Center: AI ★ + Shutter (side by side) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* Center: zoom badge + AI ★ + Shutter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
 
-            {/* AI Suggest Button — left of shutter */}
+            {/* Zoom badge — tap to cycle 0.5x/1x/2x/3x */}
+            <button onClick={cycleZoom} aria-label="Đổi độ zoom"
+              style={{
+                minWidth: 34, height: 34, borderRadius: 17, padding: '0 8px',
+                background: currentZoom !== 1 ? 'rgba(56,189,248,0.16)' : 'rgba(255,255,255,0.08)',
+                border: `1px solid ${currentZoom !== 1 ? COLORS.glassBorder : 'rgba(255,255,255,0.12)'}`,
+                color: currentZoom !== 1 ? COLORS.primary : 'rgba(255,255,255,0.75)',
+                fontSize: 11, fontWeight: 800, fontFamily: 'inherit',
+                cursor: 'pointer', flexShrink: 0,
+              }}>
+              {currentZoom}x
+            </button>
+
+            {/* AI Suggest Button */}
             <button
               onClick={handleSuggest}
               disabled={suggesting}
@@ -481,7 +348,7 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
               className="liquid-btn"
               aria-label="Chụp ảnh"
               style={{
-                width: 78, height: 78, borderRadius: 39,
+                width: 74, height: 74, borderRadius: 37,
                 background: '#fff',
                 border: `4px solid ${COLORS.primaryDark}`,
                 cursor: 'pointer', flexShrink: 0, padding: 0,
@@ -489,90 +356,30 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
                 position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
             >
-              {/* Red center dot (like ProCamera) */}
               <div style={{
                 width: 20, height: 20, borderRadius: 10,
-                background: `radial-gradient(circle at 40% 35%, #ff6b6b, #dc2626)`,
-                boxShadow: '0 2px 8px rgba(220,38,38,0.6)',
+                background: '#fff',
               }} />
             </button>
 
           </div>
 
-          {/* Right: Flip */}
-          <div style={{ width: 52, display: 'flex', justifyContent: 'flex-end' }}>
+          {/* Right: Flip camera */}
+          <div style={{ width: 48, display: 'flex', justifyContent: 'flex-end' }}>
             <button onClick={handleFlip} className="liquid-btn" aria-label="Đổi camera"
               style={{
-                width: 48, height: 48, borderRadius: 24,
-                background: 'rgba(255,255,255,0.07)',
-                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                width: 44, height: 44, borderRadius: 22,
+                background: 'rgba(255,255,255,0.08)',
                 border: '1px solid rgba(255,255,255,0.14)',
-                color: 'rgba(255,255,255,0.8)',
-                cursor: 'pointer',
+                color: 'rgba(255,255,255,0.85)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
+                cursor: 'pointer',
               }}>
               <FlipIcon />
             </button>
           </div>
         </div>
-
-        {/* ── 5. MODE SELECTOR (like AUTO | MANUAL | CINEMA) ─────────── */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: 0, paddingTop: 8,
-        }}>
-          {['TỰ DO', 'POSE', 'VIDEO'].map((m) => {
-            const isActive = mode === m;
-            return (
-              <button key={m} onClick={() => setMode(m)}
-                style={{
-                  border: 'none', background: 'transparent', cursor: 'pointer',
-                  padding: '4px 20px', fontFamily: 'inherit',
-                  fontSize: 11, fontWeight: isActive ? 800 : 500,
-                  color: isActive ? COLORS.primary : 'rgba(186,230,253,0.45)',
-                  letterSpacing: '0.06em',
-                  borderBottom: isActive ? `2px solid ${COLORS.primary}` : '2px solid transparent',
-                  transition: 'all 0.2s ease',
-                  paddingBottom: 6,
-                }}>
-                {m}
-              </button>
-            );
-          })}
-        </div>
       </div>
     </div>
   );
-}
-
-/* ── Parameter chip (like DSLR strip) ──────────────────────────────────── */
-function ParamChip({ label, value, active, onClick, icon }) {
-  return (
-    <button onClick={onClick}
-      style={{
-        background: 'transparent', border: 'none', cursor: onClick ? 'pointer' : 'default',
-        display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '3px 14px', gap: 2, flexShrink: 0,
-      }}>
-      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
-        color: 'rgba(186,230,253,0.45)', textTransform: 'uppercase' }}>
-        {label}
-      </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {icon}
-        <span style={{
-          fontSize: 13, fontWeight: 800, letterSpacing: '0.03em',
-          color: active ? COLORS.primary : 'rgba(255,255,255,0.85)',
-          fontVariantNumeric: 'tabular-nums',
-        }}>
-          {value}
-        </span>
-      </div>
-    </button>
-  );
-}
-
-function ParamDivider() {
-  return <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />;
 }

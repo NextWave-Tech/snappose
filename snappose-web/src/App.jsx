@@ -81,8 +81,8 @@ function EndUserApp() {
         />
       )}
 
-      {/* Persistent Liquid Glass Floating Dock for iPhone (except splash & result screens) */}
-      {screen !== 'splash' && screen !== 'result' && (
+      {/* Persistent Liquid Glass Floating Dock (hidden on camera — it has its own controls) */}
+      {screen !== 'splash' && screen !== 'result' && screen !== 'camera' && (
         <LiquidDock
           currentScreen={screen}
           onSelectScreen={(tabId) => setScreen(tabId)}

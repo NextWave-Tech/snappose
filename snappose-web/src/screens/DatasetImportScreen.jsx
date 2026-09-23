@@ -240,8 +240,8 @@ export default function DatasetImportScreen({ onBackToCamera }) {
       height: '100%',
       display: 'flex',
       flexDirection: 'column',
-      background: 'radial-gradient(ellipse at top, #142850 0%, #0a0a0f 70%, #000000 100%)',
-      color: '#fff',
+      background: 'linear-gradient(180deg, #0A1628 0%, #060E1A 100%)',
+      color: COLORS.text,
       overflowY: 'auto',
       padding: 'max(16px, env(safe-area-inset-top)) 16px calc(90px + env(safe-area-inset-bottom))',
     }}>
@@ -260,9 +260,8 @@ export default function DatasetImportScreen({ onBackToCamera }) {
           onClick={onBackToCamera}
           className="liquid-btn"
           style={{
-            background: 'rgba(255,255,255,0.12)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255,255,255,0.2)',
+            background: 'rgba(255,255,255,0.07)',
+            border: `1px solid ${COLORS.glassBorder}`,
             color: '#fff',
             borderRadius: 20,
             padding: '8px 16px',
@@ -278,7 +277,7 @@ export default function DatasetImportScreen({ onBackToCamera }) {
       {summary && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
           <div className="liquid-glass-card" style={{ padding: '12px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#60a5fa' }}>{summary.total_categories}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.primary }}>{summary.total_categories}</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Danh mục</div>
           </div>
           <div className="liquid-glass-card" style={{ padding: '12px 8px', textAlign: 'center' }}>
@@ -286,7 +285,7 @@ export default function DatasetImportScreen({ onBackToCamera }) {
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Tổng số Pose</div>
           </div>
           <div className="liquid-glass-card" style={{ padding: '12px 8px', textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#f472b6' }}>{summary.total_embedded_poses}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: COLORS.accent }}>{summary.total_embedded_poses}</div>
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>Có Vector CLIP</div>
           </div>
         </div>
@@ -310,7 +309,7 @@ export default function DatasetImportScreen({ onBackToCamera }) {
             padding: '10px 0',
             borderRadius: 12,
             border: 'none',
-            background: activeTab === 'manage' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.8), rgba(37, 99, 235, 0.8))' : 'transparent',
+            background: activeTab === 'manage' ? `linear-gradient(135deg, ${COLORS.primaryDark}, ${COLORS.primaryDeep})` : 'transparent',
             color: activeTab === 'manage' ? '#fff' : 'rgba(255,255,255,0.65)',
             fontSize: 13,
             fontWeight: 700,
@@ -328,7 +327,7 @@ export default function DatasetImportScreen({ onBackToCamera }) {
             padding: '10px 0',
             borderRadius: 12,
             border: 'none',
-            background: activeTab === 'import' ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.8), rgba(5, 150, 105, 0.8))' : 'transparent',
+            background: activeTab === 'import' ? `linear-gradient(135deg, ${COLORS.accentDark}, ${COLORS.accent})` : 'transparent',
             color: activeTab === 'import' ? '#fff' : 'rgba(255,255,255,0.65)',
             fontSize: 13,
             fontWeight: 700,

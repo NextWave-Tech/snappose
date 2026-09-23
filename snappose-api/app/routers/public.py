@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.models import Category, Pose
@@ -22,7 +22,9 @@ def list_categories(db: Session = Depends(get_db)):
 
 @router.get("/poses", response_model=list[PoseOut])
 def list_poses(category_id: Optional[int] = None, db: Session = Depends(get_db)):
-    query = db.query(Pose).filter(Pose.is_active.is_(True))
+    # joinedload(Pose.category) avoids one extra SELECT per pose (N+1) when
+    # serializing PoseOut.category_name/category_slug below.
+    query = db.query(Pose).options(joinedload(Pose.category)).filter(Pose.is_active.is_(True))
     if category_id is not None:
         query = query.filter(Pose.category_id == category_id)
     return query.order_by(Pose.sort_order).all()

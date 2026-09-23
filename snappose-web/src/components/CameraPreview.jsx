@@ -26,6 +26,19 @@ async function detectLenses(streamDeviceId, facingMode) {
       return { deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 4)}`, level };
     });
 
+    // iOS/WebKit (Safari and every "Chrome" on iPhone, which is WebKit underneath)
+    // hides real camera labels — they come back blank or generic. The front/back
+    // regex classification below can't tell devices apart in that case and used
+    // to fall back to "assume it matches", which could silently pick the wrong
+    // physical camera and fight the facingMode switch. When no label gives a
+    // real hint, don't guess: just report back the camera already streaming.
+    const hasUsableLabels = videos.some((d) =>
+      /front|back|rear|selfie|facetime|user|environment|wide|tele/i.test(d.label)
+    );
+    if (!hasUsableLabels) {
+      return streamDeviceId ? [{ deviceId: streamDeviceId, label: 'Camera', level: 1 }] : [];
+    }
+
     const isFront = facingMode === 'user';
     const relevant = tagged.filter((d) => {
       const lbl = d.label.toLowerCase();
@@ -365,6 +378,10 @@ const CameraPreview = forwardRef(function CameraPreview(
       canvas.width = Math.round(sw);
       canvas.height = Math.round(sh);
       const ctx = canvas.getContext('2d');
+      if (facingMode === 'user') {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
       return canvas.toDataURL('image/jpeg', 0.92);
     },
@@ -387,7 +404,8 @@ const CameraPreview = forwardRef(function CameraPreview(
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           objectFit: 'cover',
-          transform: `scale(${zoom})`, transformOrigin: 'center center',
+          transform: `scale(${zoom})${facingMode === 'user' ? ' scaleX(-1)' : ''}`,
+          transformOrigin: 'center center',
           transition: 'none',
         }}
       />
