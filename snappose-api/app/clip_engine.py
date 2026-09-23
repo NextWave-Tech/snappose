@@ -43,6 +43,17 @@ def embed_image(image: Image.Image) -> list[float]:
     return features[0].cpu().tolist()
 
 
+def embed_text(text: str) -> list[float]:
+    """Return a 512-dim embedding vector for a text prompt (same space as embed_image)."""
+    _ensure_loaded()
+    inputs = _processor(text=[text], return_tensors="pt", padding=True).to(_device)
+    with torch.no_grad():
+        out = _model.get_text_features(**inputs)
+    features = out.pooler_output if hasattr(out, "pooler_output") else out
+    features = features / features.norm(dim=-1, keepdim=True)
+    return features[0].cpu().tolist()
+
+
 def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Cosine similarity between two vectors (both assumed already L2-normalised)."""
     a_arr = np.array(a, dtype=np.float32)

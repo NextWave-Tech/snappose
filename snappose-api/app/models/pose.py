@@ -15,6 +15,7 @@ class Pose(Base):
     sort_order = Column(Integer, nullable=False, default=0)
     is_active = Column(Boolean, nullable=False, default=True)
     embedding = Column(JSON, nullable=True)
+    gender = Column(String, nullable=True)  # "nam" | "nu" | None (chưa gán nhãn)
 
     category = relationship("Category", back_populates="poses")
 
