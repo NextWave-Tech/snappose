@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { COLORS } from '../constants/colors';
 import { suggestPose } from '../api/poses';
 import { savePhotoToGallery } from './ArtGalleryScreen';
@@ -35,15 +35,12 @@ const ChevronIcon = ({ up }) => (
   </svg>
 );
 
-/* ─── Lens label ──────────────────────────────────────────────────────────── */
-const lensLabel = (level) =>
-  level === 0.5 ? '·5' : level === 1 ? '1×' : level === 2 ? '2×' : level === 3 ? '3×' : `${level}×`;
-
 /* ═══════════════════════════════════════════════════════════════════════════
    CAMERA SCREEN
 ═══════════════════════════════════════════════════════════════════════════ */
 export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto, initialPose }) {
   const previewRef = useRef(null);
+  const bottomPanelRef = useRef(null);
 
   /* Pose state */
   const [poses, setPoses]               = useState(initialPose ? [initialPose] : []);
@@ -56,18 +53,38 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
   const [facingMode, setFacingMode]     = useState('environment');
   const [flashing, setFlashing]         = useState(false);
 
-  /* Lens */
+  /* Lens & Zoom */
   const [lenses, setLenses]             = useState([]);
   const [activeLensId, setActiveLensId] = useState(null);
+  const [currentZoom, setCurrentZoom]   = useState(1);
 
   /* UI toggles */
   const [showGrid, setShowGrid]         = useState(false);
   const [arIndex, setArIndex]           = useState(0);
-  const [poseDrawerOpen, setPoseDrawerOpen] = useState(true); // collapsed by default if no poses
+  const [poseDrawerOpen, setPoseDrawerOpen] = useState(true);
   const [mode, setMode]                 = useState('POSE'); // TỰ DO | POSE | VIDEO
+
+  /* Dynamic safe height for camera frame */
+  const [bottomOffset, setBottomOffset] = useState(250);
 
   const currentAr   = ASPECT_RATIOS[arIndex];
   const currentPose = poses.find((p) => p.id === selectedPoseId) || poses[0];
+
+  const availableZooms = facingMode === 'user' ? [0.5, 1, 2] : [0.5, 1, 2, 3];
+
+  // Measure bottom panel height so viewfinder frame NEVER touches buttons
+  useEffect(() => {
+    const el = bottomPanelRef.current;
+    if (!el) return;
+    const update = () => {
+      const h = el.offsetHeight;
+      if (h > 0) setBottomOffset(h);
+    };
+    update();
+    const ro = new ResizeObserver(() => update());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [poses.length, poseDrawerOpen]);
 
   /* ── Lens detection ──────────────────────────────────────────────────── */
   const handleLensesReady = useCallback((detected) => {
@@ -76,9 +93,15 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
     if (main) setActiveLensId(main.deviceId);
   }, []);
 
-  const handleSelectLens = (deviceId) => {
-    setActiveLensId(deviceId);
-    previewRef.current?.switchToLens(deviceId);
+  const handleSelectZoom = (lvl) => {
+    setCurrentZoom(lvl);
+    previewRef.current?.applyZoom(lvl);
+  };
+
+  const cycleZoom = () => {
+    const idx = availableZooms.indexOf(currentZoom);
+    const nextIdx = (idx + 1) % availableZooms.length;
+    handleSelectZoom(availableZooms[nextIdx]);
   };
 
   /* ── Camera ─────────────────────────────────────────────────────────── */
@@ -86,6 +109,7 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
     setFacingMode((m) => (m === 'user' ? 'environment' : 'user'));
     setLenses([]);
     setActiveLensId(null);
+    setCurrentZoom(1);
   };
 
   const handleCapture = () => {
@@ -109,7 +133,7 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
         setPoses(top5);
         setSelectedPoseId(top5[0].id);
         setDetectedEnv(top5[0].category_name || 'Đã phát hiện');
-        setPoseDrawerOpen(true); // auto-expand when results arrive
+        setPoseDrawerOpen(true);
       }
     } catch (err) {
       setLoadError('Gợi ý thất bại: ' + (err.message || err));
@@ -126,14 +150,17 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
   return (
     <div style={{ height: '100%', position: 'relative', background: '#060E1A', overflow: 'hidden' }}>
 
-      {/* ── Camera Feed ─────────────────────────────────────────────── */}
+      {/* ── Camera Feed & Viewfinder Frame (positioned safely above buttons) ── */}
       <CameraPreview
         ref={previewRef}
         facingMode={facingMode}
         showGrid={showGrid}
         aspectRatio={currentAr.id}
         activeLensId={activeLensId}
+        topOffset={58}
+        bottomOffset={bottomOffset}
         onLensesReady={handleLensesReady}
+        onZoomChange={setCurrentZoom}
         overlay={mode === 'POSE' ? <PoseOverlay skeletonUrl={currentPose?.skeleton_url} /> : null}
       />
 
@@ -152,7 +179,7 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
         zIndex: 40,
         paddingTop: 'max(14px, env(safe-area-inset-top))',
         paddingInline: 14,
-        paddingBottom: 10,
+        paddingBottom: 8,
         background: 'linear-gradient(to bottom, rgba(6,14,26,0.92) 0%, rgba(6,14,26,0.6) 75%, transparent 100%)',
         display: 'flex',
         alignItems: 'center',
@@ -209,43 +236,6 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
       </div>
 
       {/* ══════════════════════════════════════════════════════════════
-          LENS SELECTOR  (center float, only if multi-lens)
-      ══════════════════════════════════════════════════════════════ */}
-      {lenses.length > 1 && (
-        <div style={{
-          position: 'absolute',
-          bottom: 'calc(168px + env(safe-area-inset-bottom))',
-          left: '50%', transform: 'translateX(-50%)',
-          zIndex: 40,
-          display: 'flex', gap: 3, alignItems: 'center',
-          background: 'rgba(6,14,26,0.78)',
-          backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-          border: `1px solid ${COLORS.glassBorder}`,
-          borderRadius: 999, padding: '3px 5px',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-        }}>
-          {lenses.map((lens) => {
-            const isActive = activeLensId === lens.deviceId;
-            return (
-              <button key={lens.deviceId} onClick={() => handleSelectLens(lens.deviceId)}
-                style={{
-                  border: 'none', borderRadius: 999, cursor: 'pointer',
-                  padding: '4px 10px',
-                  background: isActive ? COLORS.primary : 'transparent',
-                  color: isActive ? '#060E1A' : 'rgba(186,230,253,0.75)',
-                  fontSize: 11, fontWeight: 900, fontFamily: 'inherit',
-                  letterSpacing: '0.01em',
-                  transition: 'all 0.15s ease',
-                  boxShadow: isActive ? `0 0 10px ${COLORS.primaryGlow}` : 'none',
-                }}>
-                {lensLabel(lens.level)}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════
           ERROR TOAST
       ══════════════════════════════════════════════════════════════ */}
       {loadError && (
@@ -262,23 +252,25 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
       )}
 
       {/* ══════════════════════════════════════════════════════════════
-          BOTTOM PANEL
+          BOTTOM FUNCTIONAL PANEL — measured to keep viewfinder clear
       ══════════════════════════════════════════════════════════════ */}
-      <div style={{
-        position: 'absolute',
-        left: 0, right: 0, bottom: 0,
-        zIndex: 35,
-        background: 'linear-gradient(to top, rgba(6,14,26,0.97) 0%, rgba(6,14,26,0.80) 70%, transparent 100%)',
-        paddingBottom: 'calc(70px + env(safe-area-inset-bottom))',
-        display: 'flex', flexDirection: 'column', gap: 0,
-      }}>
-
-        {/* ── POSE DRAWER (collapsible) ─────────────────────────────── */}
+      <div
+        ref={bottomPanelRef}
+        style={{
+          position: 'absolute',
+          left: 0, right: 0, bottom: 0,
+          zIndex: 35,
+          background: 'linear-gradient(to top, rgba(6,14,26,0.98) 0%, rgba(6,14,26,0.88) 75%, transparent 100%)',
+          paddingBottom: 'calc(68px + env(safe-area-inset-bottom))',
+          display: 'flex', flexDirection: 'column', gap: 0,
+        }}
+      >
+        {/* ── 1. POSE DRAWER (collapsible) ─────────────────────────── */}
         {poses.length > 0 && (
           <div style={{
             marginInline: 12,
-            marginBottom: 8,
-            background: 'rgba(6,14,26,0.82)',
+            marginBottom: 6,
+            background: 'rgba(6,14,26,0.85)',
             backdropFilter: 'blur(28px)', WebkitBackdropFilter: 'blur(28px)',
             border: `1px solid ${COLORS.glassBorder}`,
             borderRadius: 18,
@@ -332,11 +324,60 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
           </div>
         )}
 
-        {/* ── PARAMETER STRIP (like DSLR) ───────────────────────────── */}
+        {/* ── 2. LENS SELECTOR (natural position, never overlaps buttons) ── */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingTop: 3,
+          paddingBottom: 4,
+        }}>
+          <div style={{
+            display: 'flex',
+            gap: 4,
+            alignItems: 'center',
+            background: 'rgba(6, 14, 26, 0.85)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: `1px solid ${COLORS.glassBorder}`,
+            borderRadius: 999,
+            padding: '3px 6px',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.45)',
+          }}>
+            {availableZooms.map((lvl) => {
+              const isActive = currentZoom === lvl;
+              return (
+                <button
+                  key={lvl}
+                  onClick={() => handleSelectZoom(lvl)}
+                  style={{
+                    border: 'none',
+                    borderRadius: 999,
+                    cursor: 'pointer',
+                    padding: '4px 10px',
+                    background: isActive ? COLORS.primary : 'transparent',
+                    color: isActive ? '#060E1A' : 'rgba(186, 230, 253, 0.85)',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    fontFamily: 'inherit',
+                    letterSpacing: '0.02em',
+                    transition: 'all 0.15s ease',
+                    boxShadow: isActive ? `0 0 12px ${COLORS.primaryGlow}` : 'none',
+                  }}
+                >
+                  {lvl}x
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── 3. PARAMETER STRIP (like DSLR) ────────────────────────── */}
         <div style={{
           display: 'flex', alignItems: 'center',
           paddingInline: 16,
-          paddingBottom: 6,
+          paddingBottom: 4,
+          paddingTop: 2,
           gap: 0,
           overflowX: 'auto', scrollbarWidth: 'none',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
@@ -359,16 +400,13 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
           />
           <ParamDivider />
           {/* Lens active */}
-          {lenses.length > 0 && (
-            <>
-              <ParamChip
-                label="LENS"
-                value={lensLabel(lenses.find(l => l.deviceId === activeLensId)?.level || 1)}
-                active={false}
-              />
-              <ParamDivider />
-            </>
-          )}
+          <ParamChip
+            label="LENS"
+            value={`${currentZoom}x`}
+            active={currentZoom !== 1}
+            onClick={cycleZoom}
+          />
+          <ParamDivider />
           {/* Mode */}
           <ParamChip
             label="MODE"
@@ -377,11 +415,11 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
           />
         </div>
 
-        {/* ── MAIN CONTROLS ROW ──────────────────────────────────────── */}
+        {/* ── 4. MAIN CONTROLS ROW ───────────────────────────────────── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           paddingInline: 22,
-          paddingTop: 14,
+          paddingTop: 12,
           paddingBottom: 4,
         }}>
 
@@ -479,10 +517,10 @@ export default function CameraScreen({ onCaptured, lastPhotoUrl, onViewLastPhoto
           </div>
         </div>
 
-        {/* ── MODE SELECTOR (like AUTO | MANUAL | CINEMA) ─────────────── */}
+        {/* ── 5. MODE SELECTOR (like AUTO | MANUAL | CINEMA) ─────────── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          gap: 0, paddingTop: 10,
+          gap: 0, paddingTop: 8,
         }}>
           {['TỰ DO', 'POSE', 'VIDEO'].map((m) => {
             const isActive = mode === m;
@@ -515,7 +553,7 @@ function ParamChip({ label, value, active, onClick, icon }) {
       style={{
         background: 'transparent', border: 'none', cursor: onClick ? 'pointer' : 'default',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '4px 14px', gap: 2, flexShrink: 0,
+        padding: '3px 14px', gap: 2, flexShrink: 0,
       }}>
       <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.1em',
         color: 'rgba(186,230,253,0.45)', textTransform: 'uppercase' }}>
@@ -536,5 +574,5 @@ function ParamChip({ label, value, active, onClick, icon }) {
 }
 
 function ParamDivider() {
-  return <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />;
+  return <div style={{ width: 1, height: 22, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />;
 }

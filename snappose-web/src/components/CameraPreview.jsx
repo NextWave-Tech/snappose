@@ -103,7 +103,10 @@ const CameraPreview = forwardRef(function CameraPreview(
     facingMode = 'environment',
     showGrid = false,
     aspectRatio = 'full',
+    topOffset = 56,
+    bottomOffset = 240,
     onLensesReady,
+    onZoomChange,
     activeLensId,
   },
   ref
@@ -119,6 +122,7 @@ const CameraPreview = forwardRef(function CameraPreview(
   const pinchStartRef = useRef(null);
 
   const currentDeviceIdRef = useRef(null);
+  const lensesRef = useRef([]);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const openStream = (constraints) =>
@@ -158,6 +162,7 @@ const CameraPreview = forwardRef(function CameraPreview(
       currentDeviceIdRef.current = devId;
 
       const lenses = await detectLenses(devId, facingMode);
+      lensesRef.current = lenses;
       if (!cancelled && onLensesReady) onLensesReady(lenses);
     }).catch((err) => {
       if (!cancelled) setError(err);
@@ -170,30 +175,29 @@ const CameraPreview = forwardRef(function CameraPreview(
     };
   }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Switch helper
+  const switchStreamTo = async (deviceId) => {
+    try {
+      const stream = await openStream({
+        deviceId: { exact: deviceId },
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 30 },
+      });
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      currentDeviceIdRef.current = deviceId;
+    } catch (err) {
+      console.warn('Switch stream failed:', err);
+    }
+  };
+
   // Switch lens when activeLensId changes
   useEffect(() => {
     if (!activeLensId) return;
     if (activeLensId === currentDeviceIdRef.current) return;
-
-    const doSwitch = async () => {
-      try {
-        const stream = await openStream({
-          deviceId: { exact: activeLensId },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
-        });
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        currentDeviceIdRef.current = activeLensId;
-        zoomRef.current = 1;
-        setZoom(1);
-      } catch (err) {
-        console.warn('Lens switch failed:', err);
-      }
-    };
-    doSwitch();
+    switchStreamTo(activeLensId);
   }, [activeLensId]);
 
   // Pinch zoom handlers
@@ -208,8 +212,10 @@ const CameraPreview = forwardRef(function CameraPreview(
       e.preventDefault();
       const { distance, zoom: startZoom } = pinchStartRef.current;
       const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, startZoom * (touchDistance(e.touches) / distance)));
-      zoomRef.current = next;
-      setZoom(next);
+      const rounded = Math.round(next * 10) / 10;
+      zoomRef.current = rounded;
+      setZoom(rounded);
+      if (onZoomChange) onZoomChange(rounded);
     }
   };
 
@@ -217,7 +223,7 @@ const CameraPreview = forwardRef(function CameraPreview(
     if (e.touches.length < 2) pinchStartRef.current = null;
   };
 
-  // Compute active frame rect in screen pixels
+  // Compute active frame rect in screen pixels — STRICTLY above bottom controls
   const frameRect = useMemo(() => {
     const cw = containerSize.width || window.innerWidth;
     const ch = containerSize.height || window.innerHeight;
@@ -234,20 +240,37 @@ const CameraPreview = forwardRef(function CameraPreview(
       };
     }
 
-    const containerRatio = cw / ch;
+    // Available space strictly between top bar and bottom functional panel
+    const safeTop = topOffset ?? 56;
+    const safeBottom = bottomOffset ?? 240;
+    const availableHeight = Math.max(120, ch - safeTop - safeBottom);
+    const availableWidth = cw;
+
+    const availableRatio = availableWidth / availableHeight;
     let fw, fh;
-    if (containerRatio > targetRatio) {
-      // Container is wider than target frame
-      fh = ch;
-      fw = Math.round(ch * targetRatio);
+    if (availableRatio > targetRatio) {
+      // Height is the constraint
+      fh = availableHeight;
+      fw = Math.round(availableHeight * targetRatio);
     } else {
-      // Container is taller than target frame (e.g. mobile portrait)
-      fw = cw;
-      fh = Math.round(cw / targetRatio);
+      // Width is the constraint
+      fw = availableWidth;
+      fh = Math.round(availableWidth / targetRatio);
     }
 
-    const left = Math.round((cw - fw) / 2);
-    const top = Math.round((ch - fh) / 2);
+    // Hard bounds clamp
+    if (fh > availableHeight) {
+      fh = availableHeight;
+      fw = Math.round(fh * targetRatio);
+    }
+    if (fw > availableWidth) {
+      fw = availableWidth;
+      fh = Math.round(fw / targetRatio);
+    }
+
+    const left = Math.round((availableWidth - fw) / 2);
+    // Center vertically within the available safe zone
+    const top = safeTop + Math.round((availableHeight - fh) / 2);
 
     return {
       left,
@@ -256,7 +279,7 @@ const CameraPreview = forwardRef(function CameraPreview(
       height: fh,
       isFull: false,
     };
-  }, [containerSize, aspectRatio]);
+  }, [containerSize, aspectRatio, topOffset, bottomOffset]);
 
   // Imperative handle
   useImperativeHandle(ref, () => ({
@@ -264,19 +287,32 @@ const CameraPreview = forwardRef(function CameraPreview(
     getFrameRect() { return frameRect; },
     switchToLens(deviceId) {
       if (!deviceId || deviceId === currentDeviceIdRef.current) return;
-      openStream({
-        deviceId: { exact: deviceId },
-        width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 },
-      }).then((stream) => {
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = stream;
-        if (videoRef.current) videoRef.current.srcObject = stream;
-        currentDeviceIdRef.current = deviceId;
-        zoomRef.current = 1;
-        setZoom(1);
-      }).catch((e) => console.warn('switchToLens failed', e));
+      switchStreamTo(deviceId);
     },
-    applyZoom(level) {
+    async applyZoom(level) {
+      if (level === 0.5) {
+        const ultra = lensesRef.current.find((l) => l.level === 0.5);
+        if (ultra && ultra.deviceId !== currentDeviceIdRef.current) {
+          await switchStreamTo(ultra.deviceId);
+        } else {
+          const track = streamRef.current?.getVideoTracks()[0];
+          const caps = track?.getCapabilities?.();
+          if (caps?.zoom && caps.zoom.min <= 0.5) {
+            track.applyConstraints({ advanced: [{ zoom: 0.5 }] }).catch(() => {});
+          }
+        }
+        zoomRef.current = 0.5;
+        setZoom(0.5);
+        if (onZoomChange) onZoomChange(0.5);
+        return;
+      }
+
+      // If returning from ultra-wide, switch back to main device
+      const main = lensesRef.current.find((l) => l.level === 1) || lensesRef.current[0];
+      if (main && currentDeviceIdRef.current !== main.deviceId) {
+        await switchStreamTo(main.deviceId);
+      }
+
       const track = streamRef.current?.getVideoTracks()[0];
       const caps = track?.getCapabilities?.();
       if (caps?.zoom && level >= caps.zoom.min && level <= caps.zoom.max) {
@@ -284,6 +320,7 @@ const CameraPreview = forwardRef(function CameraPreview(
       }
       zoomRef.current = level;
       setZoom(level);
+      if (onZoomChange) onZoomChange(level);
     },
     capture() {
       const video = videoRef.current;
@@ -295,7 +332,7 @@ const CameraPreview = forwardRef(function CameraPreview(
       const cw = containerSize.width || window.innerWidth;
       const ch = containerSize.height || window.innerHeight;
 
-      // 1. Calculate how object-fit: cover maps raw video pixels to container screen pixels
+      // 1. Calculate how object-fit: cover scales and centers video in container
       const scale = Math.max(cw / vw, ch / vh);
       const renderedW = vw * scale;
       const renderedH = vh * scale;
@@ -415,19 +452,6 @@ const CameraPreview = forwardRef(function CameraPreview(
           ? React.cloneElement(overlay, { frameRect })
           : overlay}
       </div>
-
-      {/* Zoom level badge */}
-      {zoom !== 1 && (
-        <div style={{
-          position: 'absolute', top: 58, left: '50%', transform: 'translateX(-50%)', zIndex: 8,
-          background: 'rgba(6,14,26,0.6)', color: '#38BDF8', fontSize: 11, fontWeight: 800,
-          padding: '3px 10px', borderRadius: 999, pointerEvents: 'none',
-          border: '1px solid rgba(56,189,248,0.3)',
-          letterSpacing: '0.05em',
-        }}>
-          {zoom.toFixed(1)}×
-        </div>
-      )}
 
       {/* Error overlay */}
       {error && (
