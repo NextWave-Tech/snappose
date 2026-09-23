@@ -41,6 +41,7 @@ CATEGORY_NAMES: dict[str, str] = {
     "du-lich": "Du lịch",
     "thoi-trang": "Thời trang",
     "dem": "Đêm",
+    "selfie": "Selfie",
 }
 
 

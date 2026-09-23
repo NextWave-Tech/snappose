@@ -1,7 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import require_admin
 from app.database import get_db
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/admin/poses", tags=["admin-poses"], dependencies
 
 @router.get("", response_model=list[PoseOut])
 def list_poses(category_id: Optional[int] = None, db: Session = Depends(get_db)):
-    query = db.query(Pose)
+    query = db.query(Pose).options(joinedload(Pose.category))
     if category_id is not None:
         query = query.filter(Pose.category_id == category_id)
     return query.order_by(Pose.category_id, Pose.sort_order).all()

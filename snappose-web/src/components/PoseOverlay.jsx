@@ -125,100 +125,66 @@ export default function PoseOverlay({ skeletonUrl, frameRect }) {
         />
       </div>
 
-      {/* Scale control panel — fixed on right edge for easy thumb reach */}
+      {/* Scale control — compact 3-button pill, right edge */}
       <div
         style={{
           position: 'absolute',
-          right: 10,
-          top: '40%',
+          right: 8,
+          top: '38%',
           transform: 'translateY(-50%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: 5,
-          background: 'rgba(6, 14, 26, 0.72)',
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
+          gap: 2,
+          background: 'rgba(6, 14, 26, 0.6)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
           border: `1px solid ${COLORS.glassBorder}`,
-          borderRadius: 22,
-          padding: '8px 5px',
-          boxShadow: `0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(56,189,248,0.1)`,
+          borderRadius: 18,
+          padding: '4px',
           pointerEvents: 'auto',
           zIndex: 25,
           userSelect: 'none',
-          minWidth: 40,
         }}
       >
-        {/* Auto badge */}
-        <div style={{
-          fontSize: 8,
-          fontWeight: 800,
-          color: isDirty ? COLORS.accent : COLORS.primary,
-          letterSpacing: '0.05em',
-          textTransform: 'uppercase',
-          padding: '1px 2px',
-        }}>
-          {isDirty ? 'TUNE' : 'AUTO'}
-        </div>
-
-        {/* Zoom In */}
         <button
           onClick={bump(1)}
           aria-label="Phóng to"
           style={{
-            width: 32, height: 32, borderRadius: 16,
-            border: `1px solid ${COLORS.glassBorder}`,
-            background: 'rgba(56,189,248,0.12)',
-            color: '#fff', fontSize: 17, fontWeight: 'bold',
+            width: 26, height: 26, borderRadius: 13,
+            border: 'none',
+            background: 'transparent',
+            color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 'bold',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
           }}
         >+</button>
 
-        {/* % display, tap to reset */}
         <button
           onClick={resetManual}
           title="Reset về auto-fit"
           style={{
             border: 'none', background: 'transparent',
-            color: isDirty ? COLORS.accent : 'rgba(255,255,255,0.85)',
-            fontSize: 10, fontWeight: 800,
-            cursor: 'pointer', minWidth: 32, textAlign: 'center', padding: '1px 0',
+            color: isDirty ? COLORS.accent : 'rgba(255,255,255,0.5)',
+            fontSize: 9, fontWeight: 800,
+            cursor: 'pointer', minWidth: 26, textAlign: 'center', padding: '2px 0',
           }}
         >
           {pct}%
         </button>
 
-        {/* Zoom Out */}
         <button
           onClick={bump(-1)}
           aria-label="Thu nhỏ"
           style={{
-            width: 32, height: 32, borderRadius: 16,
-            border: `1px solid ${COLORS.glassBorder}`,
-            background: 'rgba(56,189,248,0.12)',
-            color: '#fff', fontSize: 17, fontWeight: 'bold',
+            width: 26, height: 26, borderRadius: 13,
+            border: 'none',
+            background: 'transparent',
+            color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 'bold',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             cursor: 'pointer',
           }}
         >−</button>
-
-        {/* Fit button */}
-        {isDirty && (
-          <button
-            onClick={resetManual}
-            title="Auto fit"
-            style={{
-              width: 32, height: 20, borderRadius: 6,
-              border: `1px solid ${COLORS.glassBorder}`,
-              background: 'rgba(56,189,248,0.15)',
-              color: COLORS.primary,
-              fontSize: 9, fontWeight: 800,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >FIT</button>
-        )}
       </div>
     </div>
   );
