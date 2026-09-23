@@ -5,10 +5,11 @@ import { COLORS } from '../constants/colors';
  * PoseOverlay — renders skeleton guide over camera feed.
  * Features:
  *  - Auto-scale: measures container + image natural dimensions → computes fit scale
+ *  - Fits inside the active aspect-ratio frame (frameRect)
  *  - Manual ± controls to fine-tune
  *  - Full opacity (no blur)
  */
-export default function PoseOverlay({ skeletonUrl }) {
+export default function PoseOverlay({ skeletonUrl, frameRect }) {
   const containerRef = useRef(null);
   const imgRef = useRef(null);
   const [manualDelta, setManualDelta] = useState(0); // additive tweak on top of auto scale
@@ -28,19 +29,19 @@ export default function PoseOverlay({ skeletonUrl }) {
 
     if (!cw || !ch || !iw || !ih) return;
 
-    // Fit inside container, respecting aspect ratio (contain logic)
-    const scaleW = cw / iw;
-    const scaleH = ch / ih;
+    // Fit inside frame with a clean breathing room
+    const scaleW = (cw * 0.88) / iw;
+    const scaleH = (ch * 0.88) / ih;
     const fit = Math.min(scaleW, scaleH);
     setAutoScale(fit);
   }, []);
 
-  // Recompute when image changes
+  // Recompute when skeletonUrl or frameRect dimensions change
   useEffect(() => {
     setImgLoaded(false);
     setManualDelta(0);
     setAutoScale(1);
-  }, [skeletonUrl]);
+  }, [skeletonUrl, frameRect?.width, frameRect?.height]);
 
   // ResizeObserver on container
   useEffect(() => {
@@ -85,19 +86,20 @@ export default function PoseOverlay({ skeletonUrl }) {
         zIndex: 10,
       }}
     >
-      {/* Image container — full viewport, image centred */}
+      {/* Image container — matches active viewfinder frameRect */}
       <div
         ref={containerRef}
         style={{
           position: 'absolute',
-          top: '7%',
-          bottom: '20%',
-          left: 0,
-          right: 0,
+          left: frameRect ? frameRect.left : 0,
+          top: frameRect ? frameRect.top : '7%',
+          width: frameRect ? frameRect.width : '100%',
+          height: frameRect ? frameRect.height : 'calc(100% - 27%)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'hidden',
+          transition: 'all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)',
         }}
       >
         <img
@@ -107,7 +109,6 @@ export default function PoseOverlay({ skeletonUrl }) {
           onLoad={handleImageLoad}
           style={{
             display: 'block',
-            // Use natural size then scale — avoids CSS contain artefacts
             width: imgRef.current?.naturalWidth || 'auto',
             height: imgRef.current?.naturalHeight || 'auto',
             maxWidth: 'none',
@@ -124,7 +125,7 @@ export default function PoseOverlay({ skeletonUrl }) {
         />
       </div>
 
-      {/* Scale control panel — right side */}
+      {/* Scale control panel — fixed on right edge for easy thumb reach */}
       <div
         style={{
           position: 'absolute',

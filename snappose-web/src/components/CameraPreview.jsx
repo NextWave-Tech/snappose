@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
@@ -17,7 +17,6 @@ async function detectLenses(streamDeviceId, facingMode) {
     const devices = await navigator.mediaDevices.enumerateDevices();
     const videos = devices.filter((d) => d.kind === 'videoinput');
 
-    // Tag each device with a guess at zoom level
     const tagged = videos.map((d) => {
       const lbl = d.label.toLowerCase();
       let level = 1;
@@ -27,8 +26,6 @@ async function detectLenses(streamDeviceId, facingMode) {
       return { deviceId: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 4)}`, level };
     });
 
-    // Filter to correct facing direction if we can tell
-    // (iOS doesn't always name front cameras clearly, so fall back to all if unclear)
     const isFront = facingMode === 'user';
     const relevant = tagged.filter((d) => {
       const lbl = d.label.toLowerCase();
@@ -36,15 +33,12 @@ async function detectLenses(streamDeviceId, facingMode) {
       return /back|rear|environment/.test(lbl) || !/front|selfie|facetime|user/.test(lbl);
     });
 
-    // If we couldn't meaningfully filter, just return all
     const list = relevant.length > 0 ? relevant : tagged;
 
-    // Ensure the currently-active device is represented
     if (streamDeviceId && !list.find((d) => d.deviceId === streamDeviceId)) {
       list.unshift({ deviceId: streamDeviceId, label: 'Wide', level: 1 });
     }
 
-    // Sort by zoom level, deduplicate
     const seen = new Set();
     return list
       .filter((d) => {
@@ -58,26 +52,50 @@ async function detectLenses(streamDeviceId, facingMode) {
   }
 }
 
-// w:h ratio — 4:3 portrait = width 3, height 4 (dọc dài hơn ngang)
+// Aspect ratio definitions
+// In mobile portrait: 4:3 = 3 wide by 4 tall (portrait standard); 16:9 = 9 wide by 16 tall
 const ASPECT_RATIOS = [
   { id: 'full', label: 'Full', w: null, h: null },
-  { id: '4:3',  label: '4:3',  w: 3,    h: 4 },   // portrait: 3 ngang × 4 dọc
+  { id: '4:3',  label: '4:3',  w: 3,    h: 4 },
   { id: '1:1',  label: '1:1',  w: 1,    h: 1 },
-  { id: '16:9', label: '16:9', w: 9,    h: 16 },  // portrait 16:9 (dọc)
+  { id: '16:9', label: '16:9', w: 9,    h: 16 },
 ];
 
+function getTargetRatio(aspectRatioId, isLandscape) {
+  if (aspectRatioId === '1:1') return 1;
+  if (aspectRatioId === '4:3') return isLandscape ? 4 / 3 : 3 / 4;
+  if (aspectRatioId === '16:9') return isLandscape ? 16 / 9 : 9 / 16;
+  return null;
+}
+
+/** Corner bracket for the active camera viewfinder frame */
+function CornerBracket({ position, size = 20, strokeWidth = 2.5, color = '#38BDF8' }) {
+  const isTop = position.includes('top');
+  const isLeft = position.includes('left');
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: isTop ? -1 : undefined,
+        bottom: !isTop ? -1 : undefined,
+        left: isLeft ? -1 : undefined,
+        right: !isLeft ? -1 : undefined,
+        width: size,
+        height: size,
+        pointerEvents: 'none',
+        borderTop: isTop ? `${strokeWidth}px solid ${color}` : 'none',
+        borderBottom: !isTop ? `${strokeWidth}px solid ${color}` : 'none',
+        borderLeft: isLeft ? `${strokeWidth}px solid ${color}` : 'none',
+        borderRight: !isLeft ? `${strokeWidth}px solid ${color}` : 'none',
+        zIndex: 2,
+      }}
+    />
+  );
+}
+
 /**
- * CameraPreview — live feed, pinch-zoom, multi-lens, grid, capture area frame.
- *
- * Props:
- *   overlay        — React node rendered on top (PoseOverlay)
- *   facingMode     — 'user' | 'environment'
- *   showGrid       — boolean, show 3×3 rule-of-thirds grid
- *   aspectRatio    — 'full'|'4:3'|'3:4'|'1:1'
- *   onLensesReady  — callback(lenses[]) called when lenses detected
- *   activeLensId   — deviceId of the lens to activate
- *
- * Ref methods: capture(), getVideo(), switchToLens(deviceId)
+ * CameraPreview — live feed, pinch-zoom, multi-lens, grid, capture frame border.
  */
 const CameraPreview = forwardRef(function CameraPreview(
   {
@@ -90,6 +108,7 @@ const CameraPreview = forwardRef(function CameraPreview(
   },
   ref
 ) {
+  const containerRef = useRef(null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -100,11 +119,26 @@ const CameraPreview = forwardRef(function CameraPreview(
   const pinchStartRef = useRef(null);
 
   const currentDeviceIdRef = useRef(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const openStream = (constraints) =>
     navigator.mediaDevices.getUserMedia({ video: constraints, audio: false });
 
-  // ── Initial stream + lens detection ──────────────────────────────────────
+  // Measure container size
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const updateSize = () => {
+      const rect = el.getBoundingClientRect();
+      setContainerSize({ width: Math.round(rect.width), height: Math.round(rect.height) });
+    };
+    updateSize();
+    const ro = new ResizeObserver(() => updateSize());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Initial stream + lens detection
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -123,7 +157,6 @@ const CameraPreview = forwardRef(function CameraPreview(
       const devId = stream.getVideoTracks()[0]?.getSettings().deviceId || null;
       currentDeviceIdRef.current = devId;
 
-      // Detect all lenses and propagate
       const lenses = await detectLenses(devId, facingMode);
       if (!cancelled && onLensesReady) onLensesReady(lenses);
     }).catch((err) => {
@@ -137,7 +170,7 @@ const CameraPreview = forwardRef(function CameraPreview(
     };
   }, [facingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Switch lens when activeLensId changes ─────────────────────────────────
+  // Switch lens when activeLensId changes
   useEffect(() => {
     if (!activeLensId) return;
     if (activeLensId === currentDeviceIdRef.current) return;
@@ -163,7 +196,7 @@ const CameraPreview = forwardRef(function CameraPreview(
     doSwitch();
   }, [activeLensId]);
 
-  // ── Pinch zoom handlers ───────────────────────────────────────────────────
+  // Pinch zoom handlers
   const handleTouchStart = (e) => {
     if (e.touches.length === 2) {
       pinchStartRef.current = { distance: touchDistance(e.touches), zoom: zoomRef.current };
@@ -184,12 +217,52 @@ const CameraPreview = forwardRef(function CameraPreview(
     if (e.touches.length < 2) pinchStartRef.current = null;
   };
 
-  // ── Ref methods ───────────────────────────────────────────────────────────
+  // Compute active frame rect in screen pixels
+  const frameRect = useMemo(() => {
+    const cw = containerSize.width || window.innerWidth;
+    const ch = containerSize.height || window.innerHeight;
+    const isLandscape = cw > ch;
+    const targetRatio = getTargetRatio(aspectRatio, isLandscape);
+
+    if (!targetRatio || aspectRatio === 'full') {
+      return {
+        left: 0,
+        top: 0,
+        width: cw,
+        height: ch,
+        isFull: true,
+      };
+    }
+
+    const containerRatio = cw / ch;
+    let fw, fh;
+    if (containerRatio > targetRatio) {
+      // Container is wider than target frame
+      fh = ch;
+      fw = Math.round(ch * targetRatio);
+    } else {
+      // Container is taller than target frame (e.g. mobile portrait)
+      fw = cw;
+      fh = Math.round(cw / targetRatio);
+    }
+
+    const left = Math.round((cw - fw) / 2);
+    const top = Math.round((ch - fh) / 2);
+
+    return {
+      left,
+      top,
+      width: fw,
+      height: fh,
+      isFull: false,
+    };
+  }, [containerSize, aspectRatio]);
+
+  // Imperative handle
   useImperativeHandle(ref, () => ({
     getVideo() { return videoRef.current; },
+    getFrameRect() { return frameRect; },
     switchToLens(deviceId) {
-      // Trigger via activeLensId prop change handled by parent
-      // Also allow imperative call here
       if (!deviceId || deviceId === currentDeviceIdRef.current) return;
       openStream({
         deviceId: { exact: deviceId },
@@ -215,57 +288,54 @@ const CameraPreview = forwardRef(function CameraPreview(
     capture() {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (!video || !canvas || !video.videoWidth) return null;
+      if (!video || !canvas || !video.videoWidth || !video.videoHeight) return null;
+
       const vw = video.videoWidth;
       const vh = video.videoHeight;
+      const cw = containerSize.width || window.innerWidth;
+      const ch = containerSize.height || window.innerHeight;
 
-      const ar = ASPECT_RATIOS.find((a) => a.id === aspectRatio);
-      let sx = 0, sy = 0, sw = vw, sh = vh;
-      if (ar && ar.w && ar.h) {
-        const targetRatio = ar.w / ar.h;
-        const srcRatio = vw / vh;
-        if (srcRatio > targetRatio) {
-          sw = Math.round(vh * targetRatio);
-          sx = Math.round((vw - sw) / 2);
-        } else {
-          sh = Math.round(vw / targetRatio);
-          sy = Math.round((vh - sh) / 2);
-        }
-      }
+      // 1. Calculate how object-fit: cover maps raw video pixels to container screen pixels
+      const scale = Math.max(cw / vw, ch / vh);
+      const renderedW = vw * scale;
+      const renderedH = vh * scale;
+      const offsetX = (cw - renderedW) / 2;
+      const offsetY = (ch - renderedH) / 2;
 
-      // Apply digital zoom on top
+      // 2. Map frameRect screen coordinates into raw video pixel coordinates
+      let sx = (frameRect.left - offsetX) / scale;
+      let sy = (frameRect.top - offsetY) / scale;
+      let sw = frameRect.width / scale;
+      let sh = frameRect.height / scale;
+
+      // 3. Apply digital zoom if active
       const z = zoomRef.current;
       if (z > 1) {
         const zw = sw / z;
         const zh = sh / z;
-        sx += Math.round((sw - zw) / 2);
-        sy += Math.round((sh - zh) / 2);
-        sw = Math.round(zw);
-        sh = Math.round(zh);
+        sx += (sw - zw) / 2;
+        sy += (sh - zh) / 2;
+        sw = zw;
+        sh = zh;
       }
 
-      canvas.width = sw;
-      canvas.height = sh;
-      canvas.getContext('2d').drawImage(video, sx, sy, sw, sh, 0, 0, sw, sh);
+      // 4. Clamp to video bounds
+      sx = Math.max(0, Math.min(vw - 1, sx));
+      sy = Math.max(0, Math.min(vh - 1, sy));
+      sw = Math.max(1, Math.min(vw - sx, sw));
+      sh = Math.max(1, Math.min(vh - sy, sh));
+
+      canvas.width = Math.round(sw);
+      canvas.height = Math.round(sh);
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
       return canvas.toDataURL('image/jpeg', 0.92);
     },
   }));
 
-  // ── Compute clip style for aspect ratio ────────────────────────────────────
-  const ar = ASPECT_RATIOS.find((a) => a.id === aspectRatio);
-  const hasClip = ar && ar.w && ar.h;
-
-  // The video is always full-screen; we draw a frame border to show the crop
-  // The actual clip happens on capture, not visually on the video
-  const frameStyle = (() => {
-    if (!hasClip) return null;
-    const ratio = ar.w / ar.h;
-    // Calculate box dimensions that fit inside viewport
-    return { ratio };
-  })();
-
   return (
     <div
+      ref={containerRef}
       style={{ position: 'absolute', inset: 0, background: '#000', overflow: 'hidden', touchAction: 'none' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -285,21 +355,65 @@ const CameraPreview = forwardRef(function CameraPreview(
         }}
       />
 
-      {/* 3×3 Grid */}
-      {showGrid && (
-        <div className="camera-grid-3x3">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="camera-grid-3x3-cell" />
-          ))}
+      {/* ── Viewfinder Active Frame & Outer Masks ─────────────────── */}
+      <div
+        style={{
+          position: 'absolute',
+          left: frameRect.left,
+          top: frameRect.top,
+          width: frameRect.width,
+          height: frameRect.height,
+          boxShadow: frameRect.isFull
+            ? 'none'
+            : '0 0 0 9999px rgba(6, 14, 26, 0.78)',
+          border: frameRect.isFull
+            ? 'none'
+            : '1px solid rgba(56, 189, 248, 0.45)',
+          pointerEvents: 'none',
+          zIndex: 6,
+          transition: 'all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        }}
+      >
+        {/* 3×3 Grid inside active frame */}
+        {showGrid && (
+          <div className="camera-grid-3x3">
+            {Array.from({ length: 9 }).map((_, i) => (
+              <div key={i} className="camera-grid-3x3-cell" />
+            ))}
+          </div>
+        )}
+
+        {/* Center focus crosshair (+) */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 16,
+          height: 16,
+          pointerEvents: 'none',
+          opacity: 0.35,
+        }}>
+          <div style={{ position: 'absolute', top: 7, left: 0, right: 0, height: 1.5, background: '#38BDF8' }} />
+          <div style={{ position: 'absolute', left: 7, top: 0, bottom: 0, width: 1.5, background: '#38BDF8' }} />
         </div>
-      )}
 
-      {/* Capture frame border — corners only, positioned to show crop area */}
-      {hasClip && <CaptureFrameBorder ratio={frameStyle.ratio} />}
+        {/* 4 corner brackets */}
+        {!frameRect.isFull && (
+          <>
+            <CornerBracket position="top-left" />
+            <CornerBracket position="top-right" />
+            <CornerBracket position="bottom-left" />
+            <CornerBracket position="bottom-right" />
+          </>
+        )}
+      </div>
 
-      {/* Overlay layer (PoseOverlay, etc.) */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5 }}>
-        {overlay}
+      {/* Overlay layer (PoseOverlay with frameRect passed) */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 7 }}>
+        {React.isValidElement(overlay)
+          ? React.cloneElement(overlay, { frameRect })
+          : overlay}
       </div>
 
       {/* Zoom level badge */}
@@ -320,7 +434,7 @@ const CameraPreview = forwardRef(function CameraPreview(
         <div style={{
           position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
           color: '#fff', textAlign: 'center', padding: 24, fontSize: 14, background: 'rgba(0,0,0,0.7)',
-          flexDirection: 'column', gap: 12,
+          flexDirection: 'column', gap: 12, zIndex: 20,
         }}>
           <span style={{ fontSize: 32 }}>📷</span>
           <span>Không thể truy cập camera.<br />Vui lòng cho phép quyền camera và tải lại trang.</span>
@@ -331,61 +445,6 @@ const CameraPreview = forwardRef(function CameraPreview(
     </div>
   );
 });
-
-/** Renders corner-only frame border to indicate the crop area */
-function CaptureFrameBorder({ ratio }) {
-  const cornerColor = '#38BDF8';
-  const cornerSize = 22;
-  const strokeWidth = 2.5;
-
-  return (
-    <div style={{
-      position: 'absolute',
-      inset: 0,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      pointerEvents: 'none',
-      zIndex: 7,
-    }}>
-      <div style={{
-        position: 'relative',
-        // Fill the screen while preserving ratio
-        ...(ratio >= 1
-          ? { width: '100%', aspectRatio: String(ratio) }
-          : { height: '100%', aspectRatio: String(ratio) }),
-        maxWidth: '100%',
-        maxHeight: '100%',
-      }}>
-        {/* Dark overlay outside the frame */}
-        {/* Top-left corner */}
-        <svg style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
-          width={cornerSize} height={cornerSize}>
-          <path d={`M ${cornerSize} 0 L 0 0 L 0 ${cornerSize}`}
-            fill="none" stroke={cornerColor} strokeWidth={strokeWidth} strokeLinecap="round" />
-        </svg>
-        {/* Top-right corner */}
-        <svg style={{ position: 'absolute', top: 0, right: 0, overflow: 'visible' }}
-          width={cornerSize} height={cornerSize}>
-          <path d={`M 0 0 L ${cornerSize} 0 L ${cornerSize} ${cornerSize}`}
-            fill="none" stroke={cornerColor} strokeWidth={strokeWidth} strokeLinecap="round" />
-        </svg>
-        {/* Bottom-left corner */}
-        <svg style={{ position: 'absolute', bottom: 0, left: 0, overflow: 'visible' }}
-          width={cornerSize} height={cornerSize}>
-          <path d={`M 0 0 L 0 ${cornerSize} L ${cornerSize} ${cornerSize}`}
-            fill="none" stroke={cornerColor} strokeWidth={strokeWidth} strokeLinecap="round" />
-        </svg>
-        {/* Bottom-right corner */}
-        <svg style={{ position: 'absolute', bottom: 0, right: 0, overflow: 'visible' }}
-          width={cornerSize} height={cornerSize}>
-          <path d={`M 0 ${cornerSize} L ${cornerSize} ${cornerSize} L ${cornerSize} 0`}
-            fill="none" stroke={cornerColor} strokeWidth={strokeWidth} strokeLinecap="round" />
-        </svg>
-      </div>
-    </div>
-  );
-}
 
 export default CameraPreview;
 export { ASPECT_RATIOS };
