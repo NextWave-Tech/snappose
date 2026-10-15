@@ -1,3 +1,5 @@
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import httpx
@@ -12,7 +14,16 @@ from app.routers import admin_auth, admin_categories, admin_poses, admin_upload,
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="SnapPose API")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load CLIP in the background so startup isn't blocked but the first suggestion is fast.
+    threading.Thread(target=suggest.warm_up, daemon=True).start()
+    async with httpx.AsyncClient() as client:
+        app.state.http = client
+        yield
+
+
+app = FastAPI(title="SnapPose API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,11 +49,18 @@ def health():
 
 
 @app.get("/snappose/{path:path}", include_in_schema=False)
-async def proxy_minio(path: str):
+async def proxy_minio(path: str, request: Request):
     url = f"http://{settings.minio_endpoint}/snappose/{path}"
-    async with httpx.AsyncClient() as client:
-        r = await client.get(url)
-    return Response(content=r.content, media_type=r.headers.get("content-type", "image/png"))
+    r = await request.app.state.http.get(url)
+    # Pose photos/skeletons are fetched on every suggestion; letting clients cache them for a day
+    # avoids re-downloading the same images (expensive over a tunnel or mobile data).
+    headers = {"Cache-Control": "public, max-age=86400"} if r.status_code == 200 else None
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        media_type=r.headers.get("content-type", "image/png"),
+        headers=headers,
+    )
 
 
 _DIST = Path(__file__).parent.parent.parent / "snappose-web" / "dist"
