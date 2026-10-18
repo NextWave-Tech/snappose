@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, engine
-from app.routers import admin_auth, admin_categories, admin_poses, admin_upload, dataset, public, suggest
+from app.routers import admin_auth, admin_categories, admin_poses, admin_upload, auth, dataset, public, suggest
 
 Base.metadata.create_all(bind=engine)
 
@@ -35,6 +35,7 @@ app.add_middleware(
 )
 
 app.include_router(public.router)
+app.include_router(auth.router)
 app.include_router(suggest.router)
 app.include_router(dataset.router)
 app.include_router(admin_auth.router)

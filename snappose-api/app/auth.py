@@ -11,6 +11,9 @@ bearer_scheme = HTTPBearer()
 
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_DAYS = 7
+USER_TOKEN_EXPIRE_DAYS = 30
+# App-user tokens carry this type so they can never pass as an admin token (both share the secret).
+USER_TOKEN_TYPE = "user"
 
 
 def hash_password(password: str) -> str:
@@ -27,9 +30,29 @@ def create_access_token(username: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
 
 
-def require_admin(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> str:
+def create_user_token(user_id: int) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=USER_TOKEN_EXPIRE_DAYS)
+    payload = {"sub": str(user_id), "typ": USER_TOKEN_TYPE, "exp": expire}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
+
+
+def _decode(credentials: HTTPAuthorizationCredentials) -> dict:
     try:
-        payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[ALGORITHM])
-        return payload["sub"]
+        return jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[ALGORITHM])
     except JWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+
+def require_admin(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> str:
+    payload = _decode(credentials)
+    if payload.get("typ") == USER_TOKEN_TYPE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    return payload["sub"]
+
+
+def require_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)) -> int:
+    """The signed-in app user's id."""
+    payload = _decode(credentials)
+    if payload.get("typ") != USER_TOKEN_TYPE:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    return int(payload["sub"])

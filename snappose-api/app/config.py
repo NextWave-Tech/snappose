@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     admin_username: str = "admin"
     admin_password: str = "changeme123"
     cors_origins: str = "http://localhost:5173"
+    # Comma-separated OAuth client ids whose Google ID tokens are accepted (the app's Web client id).
+    google_client_ids: str = ""
 
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
