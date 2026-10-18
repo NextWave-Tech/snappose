@@ -21,3 +21,9 @@ build/
 .vscode/
 .DS_Store
 *.swp
+.devlogs/
+
+# Dataset zips downloaded for pose imports (kept locally, not versioned)
+/*.zip
+# The mobile app is its own repository (NextWave-Tech/snappose-mobile)
+/snappose-mobile/
