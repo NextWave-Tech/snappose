@@ -40,11 +40,11 @@ export function matchImageFile(file, topK = 10) {
 }
 
 export function importDatasetPose(formData) {
-  return apiFetch('/api/dataset/import', { method: 'POST', body: formData });
+  return apiFetch('/api/dataset/import', { method: 'POST', body: formData, auth: true });
 }
 
 export function getDatasetSummary() {
-  return apiFetch('/api/dataset/summary');
+  return apiFetch('/api/dataset/summary', { auth: true });
 }
 
 export function getDatasetItems({ categoryId, hasVector, search, skip = 0, limit = 100 } = {}) {
@@ -55,28 +55,28 @@ export function getDatasetItems({ categoryId, hasVector, search, skip = 0, limit
   params.append('skip', skip);
   params.append('limit', limit);
   const q = params.toString();
-  return apiFetch(`/api/dataset/items${q ? `?${q}` : ''}`);
+  return apiFetch(`/api/dataset/items${q ? `?${q}` : ''}`, { auth: true });
 }
 
 export function getDatasetItem(id) {
-  return apiFetch(`/api/dataset/items/${id}`);
+  return apiFetch(`/api/dataset/items/${id}`, { auth: true });
 }
 
 export function updateDatasetVector(id, { vector, recompute_from_photo = false } = {}) {
   const body = {};
   if (recompute_from_photo) body.recompute_from_photo = true;
   if (vector) body.vector = vector;
-  return apiFetch(`/api/dataset/items/${id}/vector`, { method: 'PUT', body });
+  return apiFetch(`/api/dataset/items/${id}/vector`, { method: 'PUT', body, auth: true });
 }
 
 export function deleteDatasetVector(id) {
-  return apiFetch(`/api/dataset/items/${id}/vector`, { method: 'DELETE' });
+  return apiFetch(`/api/dataset/items/${id}/vector`, { method: 'DELETE', auth: true });
 }
 
 export function deleteDatasetItem(id) {
-  return apiFetch(`/api/dataset/items/${id}`, { method: 'DELETE' });
+  return apiFetch(`/api/dataset/items/${id}`, { method: 'DELETE', auth: true });
 }
 
 export function patchDatasetItem(id, payload) {
-  return apiFetch(`/api/dataset/items/${id}`, { method: 'PATCH', body: payload });
+  return apiFetch(`/api/dataset/items/${id}`, { method: 'PATCH', body: payload, auth: true });
 }
