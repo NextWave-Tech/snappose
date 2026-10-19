@@ -64,7 +64,7 @@ async def proxy_minio(path: str, request: Request):
     )
 
 
-_DIST = Path(__file__).parent.parent.parent / "snappose-web" / "dist"
+_DIST = (Path(__file__).parent.parent.parent / "snappose-web" / "dist").resolve()
 
 if _DIST.exists():
     app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
@@ -73,8 +73,13 @@ if _DIST.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def serve_spa(full_path: str):
-        file_path = _DIST / full_path
-        if full_path and file_path.is_file():
-            return FileResponse(file_path)
+        # full_path comes straight from the URL: only serve files that resolve inside dist/
+        # (not via "..", an absolute path or a symlink), or .env and friends would be readable.
+        try:
+            file_path = (_DIST / full_path).resolve()
+            if full_path and file_path.is_relative_to(_DIST) and file_path.is_file():
+                return FileResponse(file_path)
+        except (OSError, ValueError):
+            pass
         return FileResponse(_DIST / "index.html")
 

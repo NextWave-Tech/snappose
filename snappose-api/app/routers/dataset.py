@@ -10,13 +10,14 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from app import storage
+from app.auth import require_admin
 from app.clip_engine import embed_image
 from app.config import settings
 from app.database import get_db
 from app.models import Category, Pose
 from app.schemas import PoseOut
 
-router = APIRouter(prefix="/api/dataset", tags=["dataset"])
+router = APIRouter(prefix="/api/dataset", tags=["dataset"], dependencies=[Depends(require_admin)])
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 CONTENT_TYPES = {

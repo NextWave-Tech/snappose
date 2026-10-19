@@ -13,7 +13,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 # source .venv/bin/activate && pip install -r requirements.txt  # macOS/Linux
 
-# 3. Tạo .env từ mẫu
+# 3. Tạo .env từ mẫu, rồi điền JWT_SECRET và ADMIN_PASSWORD (bắt buộc, server không chạy nếu để trống)
 cp .env.example .env
 
 # 4. Seed dữ liệu demo (10 category x 10 pose placeholder + 1 admin user)
@@ -25,7 +25,7 @@ cp .env.example .env
 
 API chạy ở `http://localhost:8000`. Docs Swagger: `http://localhost:8000/docs`.
 
-Tài khoản admin mặc định (đổi trong `.env`): `admin` / `changeme123`.
+Tài khoản admin được seed với `ADMIN_USERNAME` / `ADMIN_PASSWORD` trong `.env` (không còn mật khẩu mặc định). Đổi mật khẩu của admin đã tồn tại: sửa `ADMIN_PASSWORD` rồi chạy `python -m scripts.set_admin_password`.
 
 ## Cấu trúc
 
